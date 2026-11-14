@@ -1,19 +1,16 @@
 #!/usr/bin/env python
 """views.py — HTML rendering for the standalone Bill Platform.
 
-Server-rendered, stdlib only. Every page shares one frame:
+Server-rendered, stdlib only. Three distinct screen modes share one clean
+semantic engine:
 
-    brand + mode switcher        (always)
-    context-aware smart toolbar  (actions for what you're looking at)
-    reading spine                (objective / where it stands / next action
-                                  where the page carries a spine)
+    mode-desk    2-column desktop workspace (sticky index rail + reading spine)
+    mode-tv      16:9 presentation stage (/present 8-slide deck + room scale)
+    mode-mobile  thumb-zone bottom navigation bar + single-column touch layout
 
-Modes: desk (default), tv (presentation), mobile. Mode rides a cookie set
-via /mode/<name>?next=<path>; platform.js auto-suggests on first visit.
-
-Style law (Brad's UI contract + minimalist-ui skill): 17–19px body text,
-single column, muted warm palette, color = state only, bold = names and
-actions, sentences not chips, hairline borders only, no emoji.
+Style law (Brad's UI contract + minimalist-ui): 17–19px body text on desk/mobile,
+24–44px on TV, warm monochrome palette, color = state only, bold = names and
+actions, sentences not chips, hairline 1px borders only, zero emoji.
 """
 from __future__ import annotations
 
@@ -49,22 +46,107 @@ def esc(v) -> str:
 
 def _mode_links(current: str, path: str) -> str:
     out = []
-    for m, label in (("desk", "Desk"), ("tv", "TV"), ("mobile", "Mobile")):
+    specs = (
+        ("desk", "Desktop"),
+        ("tv", "TV / Present"),
+        ("mobile", "Mobile / Tablet"),
+    )
+    for m, label in specs:
         cls = "mode-link on" if m == current else "mode-link"
-        href = f"/mode/{m}?next={urllib.parse.quote(path, safe='')}"
+        dest = "/present?s=1" if (m == "tv" and path == "/") else path
+        href = f"/mode/{m}?next={urllib.parse.quote(dest, safe='')}"
         out.append(f'<a class="{cls}" href="{href}">{label}</a>')
     return "".join(out)
 
 
-def toolbar(actions: list[tuple[str, str, str]]) -> str:
-    """actions: [(label, href, kind)] — kind 'primary' or 'link'."""
+def _steward_control(ctx: dict) -> str:
+    nxt = urllib.parse.quote(ctx["path"], safe="")
+    if ctx["steward"]:
+        return (f'<a class="steward-pill on" href="/steward/lock?next={nxt}" '
+                f'title="Click to lock Steward triage">Steward: On</a>')
+    href = f"/steward/toggle?next={nxt}" if ctx.get("onetap") else f"/steward?next={nxt}"
+    return (f'<a class="steward-pill" href="{href}" '
+            f'title="Unlock Steward triage controls">Steward: Off</a>')
+
+
+def toolbar(actions: list[tuple[str, str, str]], label: str = "Context actions") -> str:
+    """actions: [(label, href, kind)] — kind in ('primary', 'link', 'pill', 'pill-on')."""
     items = "".join(
         f'<a class="tb-{k}" href="{esc(h)}">{esc(t)}</a>' for t, h, k in actions)
-    return f'<nav class="toolbar" aria-label="Context actions">{items}</nav>'
+    return (f'<nav class="toolbar" aria-label="{esc(label)}">'
+            f'<div class="tb-items">{items}</div>'
+            f'<div class="tb-selection" id="tbSelection" hidden></div>'
+            f'</nav>')
 
 
-def page(title: str, body: str, mode: str, path: str,
-         actions: list[tuple[str, str, str]]) -> bytes:
+def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
+    path = ctx["path"]
+    n_q = db.queue_count()
+    n_req = db.open_request_count()
+    nav_items = [
+        ("/", "Desk"),
+        ("/bill", "The Bill (23)"),
+        ("/calculator", "Funding Braid"),
+        ("/margin", "Public Margin"),
+        ("/requests", f"Requests ({n_req})"),
+        ("/positions", "Positions"),
+        ("/claims", "Claims Ledger"),
+        ("/decisions", "Locked Decisions"),
+        ("/editions", "Editions"),
+        ("/intake", f"Intake Queue ({n_q})"),
+        ("/tv", "TV Briefing Deck"),
+    ]
+    links = []
+    for href, label in nav_items:
+        active = (path == href) or (href == "/bill" and path.startswith("/clause/"))
+        cls = ' class="rail-on"' if active else ""
+        links.append(f'<li><a href="{href}"{cls}>{esc(label)}</a></li>')
+
+    sub_html = ""
+    if sublinks:
+        s_items = "".join(
+            f'<li><a href="{esc(h)}">{esc(lbl)}</a></li>' for lbl, h in sublinks)
+        sub_html = f'<p class="rail-head">On this screen</p><ul class="rail-sub">{s_items}</ul>'
+
+    return (f'<aside class="desk-rail" aria-label="Workspace navigation">'
+            f'<p class="rail-head">Platform</p>'
+            f'<ul class="rail-nav">{"".join(links)}</ul>'
+            f'{sub_html}'
+            f'</aside>')
+
+
+def _mobile_bottom_nav(ctx: dict) -> str:
+    path = ctx["path"]
+    tabs = [
+        ("/", "Desk", '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/>'),
+        ("/bill", "Bill", '<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h6M9 17h6"/>'),
+        ("/calculator", "Braid", '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>'),
+        ("/margin", "Margin", '<path d="M4 5h16v11H8l-4 4z"/>'),
+        ("/requests", "Requests", '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
+    ]
+    out = []
+    for href, label, svg_inner in tabs:
+        on = (path == href) or (href == "/bill" and path.startswith("/clause/"))
+        cls = "mnav-item on" if on else "mnav-item"
+        out.append(
+            f'<a class="{cls}" href="{href}">'
+            f'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" '
+            f'stroke="currentColor" stroke-width="1.75" stroke-linecap="round" '
+            f'stroke-linejoin="round" aria-hidden="true">{svg_inner}</svg>'
+            f'<span>{label}</span></a>'
+        )
+    return f'<nav class="mobile-bar" aria-label="Mobile navigation">{"".join(out)}</nav>'
+
+
+def page(title: str, body: str, ctx: dict,
+         actions: list[tuple[str, str, str]],
+         toolbar_label: str = "Context actions",
+         sublinks: list[tuple[str, str]] | None = None,
+         is_stage: bool = False) -> bytes:
+    mode = ctx["mode"]
+    path = ctx["path"]
+    stage_cls = " is-stage" if is_stage else ""
+    rail = "" if is_stage else _desk_rail(ctx, sublinks)
     doc = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -73,24 +155,34 @@ def page(title: str, body: str, mode: str, path: str,
 <title>{esc(title)} — {BRAND}</title>
 <link rel="stylesheet" href="/static/platform.css">
 </head>
-<body class="mode-{esc(mode)}">
+<body class="mode-{esc(mode)}{stage_cls}" data-steward="{'1' if ctx['steward'] else '0'}">
+<div class="viewport-shell">
 <header class="topbar">
   <a class="brand" href="/">{BRAND}<small>{esc(SUB)}</small></a>
-  <div class="modes" role="group" aria-label="Screen mode">{_mode_links(mode, path)}</div>
+  <div class="topbar-right">
+    <div class="modes" role="group" aria-label="Screen mode">{_mode_links(mode, path)}</div>
+    {_steward_control(ctx)}
+  </div>
 </header>
-{toolbar(actions)}
-<main class="page">
-{body}
-</main>
+{toolbar(actions, toolbar_label)}
+<div class="workspace">
+  {rail}
+  <main class="page" id="main-content">
+  {body}
+  </main>
+</div>
 <footer class="foot">
   <p>Working draft — nothing here is filed law. Marks land in intake and
   are read into the ledger by a person, never automatically.</p>
   <p class="foot-nav"><a href="/">Desk</a> · <a href="/bill">The bill</a> ·
-  <a href="/margin">The margin</a> · <a href="/intake">Intake</a> ·
-  <a href="/requests">Requests</a> · <a href="/positions">Positions</a> ·
-  <a href="/claims">Claims</a> · <a href="/decisions">Decisions</a> ·
-  <a href="/editions">Editions</a></p>
+  <a href="/calculator">Funding braid</a> · <a href="/margin">The margin</a> ·
+  <a href="/intake">Intake</a> · <a href="/requests">Requests</a> ·
+  <a href="/positions">Positions</a> · <a href="/claims">Claims</a> ·
+  <a href="/decisions">Decisions</a> · <a href="/editions">Editions</a> ·
+  <a href="/tv">TV Present</a></p>
 </footer>
+{_mobile_bottom_nav(ctx)}
+</div>
 <script src="/static/platform.js"></script>
 </body>
 </html>"""
@@ -108,13 +200,13 @@ def _clause_label(cid) -> str:
 
 
 def _reline(m) -> str:
-    return f' · re: {esc(m["reply_to"])}' if m["reply_to"] else ""
+    return f' · re: <a href="/margin#{esc(m["reply_to"])}">{esc(m["reply_to"])}</a>' if m["reply_to"] else ""
 
 
 def _mark_html(m, show_answer_link: bool = True) -> str:
     quote = (f'<blockquote class="quote">“{esc(m["quote_text"])}”</blockquote>'
              if m["quote_text"] else "")
-    proposed = (f'<p class="proposed"><b>Proposed:</b> '
+    proposed = (f'<p class="proposed"><b>Proposed wording:</b> '
                 f'{esc(m["proposed_text"])}</p>'
                 if m["proposed_text"] else "")
     response = (f'<p class="response"><b>{esc(m["responder_role"] or "Drafting Table")}:</b> '
@@ -134,7 +226,8 @@ def _mark_html(m, show_answer_link: bool = True) -> str:
 
 
 def _mark_form(cid: str | None, re_no: str | None,
-               quote: str | None = None) -> str:
+               quote: str | None = None,
+               kind_sel: str | None = None) -> str:
     options = ['<option value="">— general, no clause —</option>']
     for c in db.clauses():
         sel = ' selected' if c["id"] == cid else ""
@@ -147,27 +240,27 @@ def _mark_form(cid: str | None, re_no: str | None,
               ) if re_no else ""
     qline = (f'<input type="hidden" name="quote" value="{esc(quote[:400])}">'
              f'<p class="reline">Marking the selection: '
-             f'<i>{esc(quote[:140])}</i></p>') if quote else ""
+             f'<i>“{esc(quote[:180])}”</i></p>') if quote else ""
+    k_opts = []
+    for k_val, k_lbl in (("comment", "Comment"), ("question", "Question"), ("edit", "Proposed edit")):
+        sel = " selected" if k_val == kind_sel else ""
+        k_opts.append(f'<option value="{k_val}"{sel}>{k_lbl}</option>')
     return f"""
 <form method="post" action="/api/mark" class="stack">
   {reline}{qline}
   <div class="row">
     <label>Clause<select name="clause_id">{''.join(options)}</select></label>
-    <label>Kind<select name="kind">
-      <option value="comment">Comment</option>
-      <option value="question">Question</option>
-      <option value="edit">Proposed edit</option>
-    </select></label>
+    <label>Kind<select name="kind">{''.join(k_opts)}</select></label>
   </div>
-  <label>Your mark<textarea name="body" rows="5" required
+  <label>Your mark<textarea name="body" rows="4" required
     placeholder="Write it plainly — a suggestion, a concern, a correction, a question."></textarea></label>
-  <label>Proposed wording <span class="quiet">(optional — for edits)</span>
+  <label>Proposed wording <span class="quiet">(optional — for clause edits)</span>
     <textarea name="proposed" rows="2"
-      placeholder="The exact words you'd put in."></textarea></label>
+      placeholder="The exact statutory or plain words you propose."></textarea></label>
   <div class="row">
-    <label>Name <span class="quiet">(optional — sign it and it stands publicly)</span>
-      <input name="name" autocomplete="name"></label>
-    <label>Contact <span class="quiet">(optional — never shown)</span>
+    <label>Name or role <span class="quiet">(optional — sign it and it stands publicly)</span>
+      <input name="name" autocomplete="name" placeholder="e.g. St. Paul Renter, Rural Provider"></label>
+    <label>Contact <span class="quiet">(optional — never shown publicly)</span>
       <input name="contact" autocomplete="off"></label>
   </div>
   <p class="crisis">If this is about your own housing right now —
@@ -178,7 +271,7 @@ def _mark_form(cid: str | None, re_no: str | None,
 
 # ---------- pages ----------
 
-def home(mode: str, path: str) -> bytes:
+def home(ctx: dict) -> bytes:
     meta = db.meta()
     ev = db.last_event()
     cur = db.journey_current()
@@ -187,6 +280,7 @@ def home(mode: str, path: str) -> bytes:
     counts = db.margin_counts()
     n_marks = sum(counts.values())
     n_clauses = len(db.clauses())
+    braid = db.calculate_braid(1300.0, 1, True)
 
     if ev:
         stands = f"Last event: {esc(ev['what'])} — {esc(ev['happened_at'])}."
@@ -196,14 +290,15 @@ def home(mode: str, path: str) -> bytes:
         stands += (f" The campaign sits at <b>{esc(cur['name'])}</b> — "
                    f"{esc(cur['note'])}.")
 
-    if n_queued:
+    if n_queued and ctx["steward"]:
         nxt = (f'<a class="next" href="/intake">Triage the intake queue '
                f'({n_queued} waiting)</a>')
-    elif n_open:
+    elif n_open and ctx["steward"]:
         nxt = (f'<a class="next" href="/requests">Work the requests desk '
                f'({n_open} open)</a>')
     else:
-        nxt = '<a class="next" href="/bill">Read the draft</a>'
+        nxt = ('<a class="next" href="/bill">Read the 23-clause draft</a> '
+               'or <a class="next" href="/tv">launch the 8-slide TV briefing</a>.')
 
     journey = "".join(
         f'<li class="j-{esc(j["state"])}"><b>{j["step"]}. '
@@ -212,8 +307,11 @@ def home(mode: str, path: str) -> bytes:
         for j in db.journey())
 
     pillars = "".join(
-        f'<p class="pillar"><b>{esc(p["label"])}</b> — '
-        f'{esc(p["headline"])}</p>'
+        f'<div class="bento-item">'
+        f'<p class="mno"><b>{esc(p["label"])}</b> · {_clause_label(p["clause_ref"])}</p>'
+        f'<p><b>{esc(p["headline"])}</b></p>'
+        f'<p class="quiet">{esc(p["detail"])}</p>'
+        f'</div>'
         for p in meta["summary_points"])
 
     body = f"""
@@ -223,100 +321,159 @@ def home(mode: str, path: str) -> bytes:
   <p class="spine-line"><span class="spine-tag">Where it stands</span>
     {stands} The draft holds <b>{n_clauses} clauses</b> across five titles;
     <b>{n_marks}</b> marks are on the public ledger and <b>{n_queued}</b>
-    wait in intake.</p>
+    wait in dark intake.</p>
   <p class="spine-line"><span class="spine-tag">Next action</span>{nxt}</p>
 </section>
+
+<section>
+  <h2>Core mechanics at a glance</h2>
+  <div class="bento-grid">{pillars}</div>
+  <p class="pillar-calc">Base funding braid at $1,300/mo rent:
+    <b>${braid['deposit_float_mo']:.2f}</b> deposit float +
+    <b>${braid['renter_share_mo']:.2f}</b> M1PR monthly advance +
+    <b>${braid['landlord_match_mo']:.2f}</b> landlord match =
+    <b>${braid['total_pool_mo']:.2f}/mo</b> (~1.18% of rent).
+    <a href="/calculator">Test any rent or building size →</a></p>
+</section>
+
 <section>
   <h2>The pipeline</h2>
   <ol class="journey">{journey}</ol>
 </section>
-<section>
-  <h2>What the bill does</h2>
-  {pillars}
-</section>
+
 <section class="evidence">
-  <h2>Evidence</h2>
+  <h2>Evidence &amp; working boards</h2>
   <ul class="ev">
-    <li><a href="/bill">The draft</a> — every clause, margins open.</li>
-    <li><a href="/margin">The margin</a> — marks read into the ledger.</li>
-    <li><a href="/intake">Intake queue</a> — what waits for read-in.</li>
-    <li><a href="/requests">Requests desk</a> — briefings, amendments, asks.</li>
-    <li><a href="/positions">Positions</a> — who stands where.</li>
-    <li><a href="/claims">Claims ledger</a> — every public figure, checked.</li>
-    <li><a href="/decisions">Locked decisions</a> — the eight that hold.</li>
-    <li><a href="/editions">Editions</a> — how the draft got here.</li>
+    <li><a href="/bill">The draft</a> — all 23 clauses, audience lenses, plain-English layer, margins open.</li>
+    <li><a href="/calculator">Funding braid calculator</a> — test monthly rent, units, M1PR credit, and stress shocks.</li>
+    <li><a href="/margin">The margin</a> — public docket of read-in marks and drafter answers.</li>
+    <li><a href="/requests">Requests desk</a> — briefings, amendments, positions, and asks ({n_open} active).</li>
+    <li><a href="/positions">Positions</a> — who stands where, dated.</li>
+    <li><a href="/claims">Claims ledger</a> — every public figure, verified or labeled estimate.</li>
+    <li><a href="/decisions">Locked decisions</a> — the eight non-negotiable safeguards.</li>
+    <li><a href="/editions">Editions</a> — dated change ledger (E-01 through E-09).</li>
+    <li><a href="/tv">TV / Presentation stage</a> — 8-slide 16:9 briefing deck for rooms and screenshares.</li>
   </ul>
 </section>"""
-    return page("Desk", body, mode, path, [
+    acts = [
         ("The bill", "/bill", "primary"),
+        ("Funding calculator", "/calculator", "link"),
         ("The margin", "/margin", "link"),
         ("Requests", "/requests", "link"),
-    ])
+        ("Present (TV)", "/tv", "link"),
+    ]
+    if ctx["steward"] and n_queued:
+        acts.append((f"Triage intake ({n_queued})", "/intake", "pill-on"))
+    return page("Desk", body, ctx, acts, "Desk actions")
 
 
-def bill(mode: str, path: str) -> bytes:
+def bill(lens: str, view_style: str, ctx: dict) -> bytes:
+    if lens not in ("all", "renter", "provider", "lawmaker"):
+        lens = "all"
+    if view_style not in ("both", "statute", "plain"):
+        view_style = "both"
+
     titles = {t["num"]: t for t in db.titles()}
     counts = db.margin_counts()
     parts = []
+    sublinks = []
     last_title = None
+    shown = 0
+
     for c in db.clauses():
+        aud_list = [a.strip() for a in (c["audiences"] or "renter,provider,lawmaker").split(",") if a.strip()]
+        if lens != "all" and lens not in aud_list:
+            continue
+        shown += 1
         if c["title_num"] != last_title:
             last_title = c["title_num"]
             t = titles[last_title]
+            tid = f"title-{last_title}"
+            sublinks.append((f"{t['code']}: {t['name']}", f"#{tid}"))
             parts.append(
-                f'<h2 class="title-head">{esc(t["code"])} — '
+                f'<h2 class="title-head" id="{tid}">{esc(t["code"])} — '
                 f'{esc(t["name"])}</h2>'
                 f'<p class="title-note">{esc(t["subtitle"])}</p>')
         n = counts.get(c["id"], 0)
         badge = (f'<a class="mcount" href="/clause/{esc(c["id"])}#margin">'
                  f'({n})</a>') if n else ''
         tag = _status(c["status"])
-        plain = (f'<p class="plain"><b>In plain language:</b> '
-                 f'{esc(c["plain_text"])}</p>') if c["plain_text"] else ""
+
+        statute_html = (f'<p class="statute-copy">{esc(c["statute_text"])}</p>'
+                        if view_style in ("both", "statute") else "")
+        plain_html = (f'<p class="plain"><b>In plain language:</b> '
+                      f'{esc(c["plain_text"])}</p>'
+                      if (c["plain_text"] and view_style in ("both", "plain")) else "")
+
+        lens_note = ""
+        if lens == "renter" and c["renter_note"]:
+            lens_note = f'<p class="lens-callout"><b>For renters:</b> {esc(c["renter_note"])}</p>'
+        elif lens == "provider" and c["provider_note"]:
+            lens_note = f'<p class="lens-callout"><b>For housing providers:</b> {esc(c["provider_note"])}</p>'
+        elif lens == "lawmaker" and c["lawmaker_note"]:
+            lens_note = f'<p class="lens-callout"><b>For lawmakers &amp; staff:</b> {esc(c["lawmaker_note"])}</p>'
+
         parts.append(f"""
 <section class="clause" id="c-{esc(c['id'])}" data-clause="{esc(c['id'])}">
   <header class="chead">
-    <span class="secnum">{esc(c['id'])}</span>
-    <h3>{esc(c['heading'])} {tag}</h3>
-    <a class="annot" href="/mark?c={esc(c['id'])}" aria-label="Mark {esc(c['id'])}">+</a>
+    <a class="secnum" href="/clause/{esc(c['id'])}">{esc(c['id'])}</a>
+    <h3><a class="chead-link" href="/clause/{esc(c['id'])}">{esc(c['heading'])}</a> {tag}</h3>
+    <a class="annot" href="/mark?c={esc(c['id'])}" aria-label="Mark {esc(c['id'])}" title="Add a mark to {esc(c['id'])}">+</a>
     {badge}
   </header>
-  <div class="cbody"><p>{esc(c['statute_text'])}</p>{plain}</div>
+  <div class="cbody">{statute_html}{plain_html}{lens_note}</div>
 </section>""")
+
+    lens_bar = []
+    for k, lbl in (("all", "All clauses"), ("renter", "Renter lens"),
+                   ("provider", "Provider lens"), ("lawmaker", "Lawmaker lens")):
+        kind = "pill-on" if lens == k else "pill"
+        lens_bar.append((lbl, f"/bill?lens={k}&view={view_style}", kind))
+
+    next_view = {"both": ("Plain only", "plain"),
+                 "plain": ("Statute only", "statute"),
+                 "statute": ("Statute + Plain", "both")}[view_style]
+
     body = f"""
 <header class="mast">
   <h1>The draft, read through</h1>
-  <p class="lede">Every clause. The <b>+</b> opens a mark on that clause;
-  the count shows marks already read in. Open drafting questions stand in
-  the open — nothing is hidden.</p>
+  <p class="lede">Showing <b>{shown}</b> clause(s). Select any phrase to
+  quote or propose an edit directly from the smart toolbar above; tap
+  <b>+</b> to mark a clause, or click a clause code to inspect its sources
+  and margin.</p>
 </header>
 {''.join(parts)}"""
-    return page("The Bill", body, mode, path, [
+
+    actions = [
         ("Mark the draft", "/mark", "primary"),
-        ("The margin", "/margin", "link"),
-        ("Claims", "/claims", "link"),
-        ("Present", "/mode/tv?next=/bill", "link"),
-    ])
+        *lens_bar,
+        (next_view[0], f"/bill?lens={lens}&view={next_view[1]}", "link"),
+        ("Calculator", "/calculator", "link"),
+        ("Present", "/tv", "link"),
+    ]
+    return page("The Bill", body, ctx, actions, "Draft reader tools", sublinks=sublinks)
 
 
-def clause_view(cid: str, mode: str, path: str) -> bytes | None:
+def clause_view(cid: str, ctx: dict) -> bytes | None:
     c = db.clause(cid)
     if not c:
         return None
     prev_id, next_id = db.clause_neighbors(cid)
     rows = db.marks(status="read_in", clause_id=cid)
-    margin = "".join(_mark_html(m) for m in rows) or (
+    margin_html = "".join(_mark_html(m) for m in rows) or (
         '<p class="quiet">No marks read in on this clause yet.</p>')
     nav = []
     if prev_id:
-        nav.append(f'<a href="/clause/{esc(prev_id)}">← {esc(prev_id)}</a>')
+        nav.append(f'<a class="pnav-btn" href="/clause/{esc(prev_id)}">← {esc(prev_id)}</a>')
+    else:
+        nav.append('<span></span>')
     if next_id:
-        nav.append(f'<a href="/clause/{esc(next_id)}">{esc(next_id)} →</a>')
+        nav.append(f'<a class="pnav-btn" href="/clause/{esc(next_id)}">{esc(next_id)} →</a>')
 
     notes = []
     for label, field in (("Renter", "renter_note"),
                          ("Housing provider", "provider_note"),
-                         ("Lawmaker", "lawmaker_note")):
+                         ("Lawmaker & staff", "lawmaker_note")):
         if c[field]:
             notes.append(f'<li><b>{label}:</b> {esc(c[field])}</li>')
     notes_html = (f'<ul class="notes">{"".join(notes)}</ul>' if notes else "")
@@ -328,8 +485,8 @@ def clause_view(cid: str, mode: str, path: str) -> bytes | None:
             continue
         cl = db.claim(rid)
         if cl:
-            refs.append(f'<li><b>{esc(cl["figure"])}</b> — {esc(cl["claim"])} '
-                        f'{_status(cl["status"])} '
+            refs.append(f'<li><a href="/claims#{esc(cl["id"])}"><b>{esc(cl["figure"])}</b></a> — '
+                        f'{esc(cl["claim"])} {_status(cl["status"])} '
                         f'<span class="quiet">({esc(cl["source"] or "internal derivation")})</span></li>')
     refs_html = (f'<section class="refs"><h2>Standing on</h2>'
                  f'<ul class="ev">{"".join(refs)}</ul></section>' if refs else "")
@@ -343,66 +500,372 @@ def clause_view(cid: str, mode: str, path: str) -> bytes | None:
   <h1>{esc(c['id'])} — {esc(c['heading'])} {_status(c['status'])}</h1>
 </header>
 <div class="clause-focus" data-clause="{esc(c['id'])}">
-  <div class="cbody"><p>{esc(c['statute_text'])}</p>{plain}</div>
+  <div class="cbody"><p class="statute-copy">{esc(c['statute_text'])}</p>{plain}</div>
 </div>
 {notes_html}
-<nav class="pnav">{' '.join(nav)}</nav>
+<nav class="pnav" aria-label="Adjacent clauses">{' '.join(nav)}</nav>
 {refs_html}
 <section id="margin" class="margin-block">
-  <h2>The margin on {esc(cid)}</h2>
-  {margin}
+  <h2>The margin on {esc(cid)} ({len(rows)})</h2>
+  {margin_html}
 </section>
-<section class="markform">
+<section class="markform" id="mark-clause">
   <h2>Mark this clause</h2>
   {_mark_form(cid, None)}
 </section>"""
-    return page(f"{cid}", body, mode, path, [
+
+    actions = [
         (f"Mark {cid}", f"/mark?c={cid}", "primary"),
+        (f"Propose edit on {cid}", f"/mark?c={cid}&kind=edit", "link"),
         (f"Request on {cid}", f"/requests?c={cid}#new", "link"),
-        ("The margin", "/margin", "link"),
-        ("The draft", "/bill", "link"),
-    ])
+    ]
+    if prev_id:
+        actions.append((f"← {prev_id}", f"/clause/{prev_id}", "pill"))
+    if next_id:
+        actions.append((f"{next_id} →", f"/clause/{next_id}", "pill"))
+    actions.append(("All clauses", "/bill", "link"))
+    return page(f"Clause {cid}", body, ctx, actions, f"Clause {cid} tools")
+
+
+def calculator(rent: float, units: int, m1pr: bool, ctx: dict) -> bytes:
+    res = db.calculate_braid(rent, units, m1pr)
+    m1pr_checked = " checked" if m1pr else ""
+    oop_label = (
+        "$0.00 / mo new out-of-pocket (covered via monthly M1PR tax-credit advance)"
+        if res["m1pr_eligible"]
+        else f"${res['renter_out_of_pocket_mo']:.2f} / mo direct disclosed pool line (household above $77,570 M1PR cap)"
+    )
+    body = f"""
+<header class="mast">
+  <h1>Three-source funding braid &amp; stress test</h1>
+  <p class="lede">Test any Minnesota monthly rent, portfolio unit count, and
+  M1PR eligibility against the 2026-10-23 math audit (<a href="/clause/II-3">Clause II-3</a>).
+  Figures marked <b>estimate</b> carry transparent derivations awaiting formal actuarial review.</p>
+</header>
+
+<form method="get" action="/calculator" class="calc-form" id="braidForm">
+  <div class="calc-controls">
+    <label>Monthly rent ($/unit)
+      <div class="calc-slider-row">
+        <input type="range" min="600" max="3500" step="25" value="{int(res['monthly_rent'])}" id="rentRange" aria-label="Monthly rent slider">
+        <input type="number" name="rent" id="rentInput" min="400" max="10000" step="25" value="{int(res['monthly_rent'])}">
+      </div>
+    </label>
+    <label>Units in lease / portfolio
+      <input type="number" name="units" id="unitsInput" min="1" max="500000" step="1" value="{res['units']}">
+    </label>
+    <label class="calc-check">
+      <input type="checkbox" name="m1pr" value="1" id="m1prInput"{m1pr_checked}>
+      <span>Tenant eligible for MN Renter's Credit (M1PR — income up to $77,570)</span>
+    </label>
+    <noscript><button class="btn" type="submit">Calculate</button></noscript>
+  </div>
+</form>
+
+<section class="bento-grid calc-grid" aria-live="polite">
+  <div class="bento-item">
+    <p class="mno">Leg 1 · Escrowed Deposit Float (3% net)</p>
+    <p class="big-num" id="valFloat">${res['deposit_float_mo']:.2f}<span>/unit/mo</span></p>
+    <p class="quiet">4% Treasury yield on 1-month escrowed deposit minus the tenant's
+    statutory 1% interest floor (<span id="valTenantInt">${res['tenant_1pct_interest_yr']:.2f}/yr</span> kept by renter).</p>
+  </div>
+  <div class="bento-item">
+    <p class="mno">Leg 2 · Renter Share (M1PR Advance)</p>
+    <p class="big-num" id="valRenter">${res['renter_share_mo']:.2f}<span>/unit/mo</span></p>
+    <p class="quiet" id="valOop">{esc(oop_label)}</p>
+  </div>
+  <div class="bento-item">
+    <p class="mno">Leg 3 · Landlord Matched Share</p>
+    <p class="big-num" id="valLandlord">${res['landlord_match_mo']:.2f}<span>/unit/mo</span></p>
+    <p class="quiet">Community-rated base + bounded experience band; clean years earn a mutual no-claim dividend.</p>
+  </div>
+  <div class="bento-item highlight">
+    <p class="mno">Combined Assurance Pool (~1.18% of rent)</p>
+    <p class="big-num" id="valTotal">${res['total_pool_mo']:.2f}<span>/unit/mo</span></p>
+    <p class="quiet">Annual landlord match across <b id="valUnits">{res['units']}</b> unit(s):
+    <b id="valLandlordYr">${res['landlord_annual_total']:,.2f}/yr</b> vs. <b>$5,600–$7,400</b> cost of a single eviction
+    (<b id="valUnitYears">{res['unit_years_per_eviction']}</b> unit-years of match = 1 avoided eviction).</p>
+  </div>
+</section>
+
+<section>
+  <h2>Actuarial stress scenarios (per unit / month)</h2>
+  <div class="stress-table">
+    <div class="stress-row">
+      <span><b>Base case</b> (~1.18% of rent · ~$106M statewide claims)</span>
+      <b id="stBase">${res['stress_base_mo']:.2f} / mo</b>
+    </div>
+    <div class="stress-row">
+      <span><b>Fraud / moral-hazard stress</b> (+30% claims shock · ~1.63% of rent)</span>
+      <b id="stFraud">${res['stress_fraud_mo']:.2f} / mo</b>
+    </div>
+    <div class="stress-row">
+      <span><b>Recession shock</b> (6% statewide lease default · ~2.31% of rent)</span>
+      <b id="stRecession">${res['stress_recession_mo']:.2f} / mo</b>
+    </div>
+  </div>
+</section>"""
+
+    actions = [
+        ("Clause II-3 (Braid)", "/clause/II-3", "primary"),
+        ("$1,000 rent", "/calculator?rent=1000&units=1&m1pr=1", "pill" if int(rent) != 1000 else "pill-on"),
+        ("$1,300 base", "/calculator?rent=1300&units=1&m1pr=1", "pill" if int(rent) != 1300 else "pill-on"),
+        ("$1,650 metro", "/calculator?rent=1650&units=1&m1pr=1", "pill" if int(rent) != 1650 else "pill-on"),
+        ("20-unit owner", "/calculator?rent=1450&units=20&m1pr=1", "pill" if units != 20 else "pill-on"),
+        ("Claims ledger", "/claims", "link"),
+    ]
+    return page("Funding Braid Calculator", body, ctx, actions, "Calculator presets")
+
+
+def present(slide: int, clause_id: str | None, rent: float, ctx: dict) -> bytes:
+    """Dedicated 8-slide 16:9 TV / Presentation briefing deck."""
+    total_slides = 8
+    s = max(1, min(total_slides, slide))
+    meta = db.meta()
+    braid = db.calculate_braid(rent, 1, True)
+    all_clauses = db.clauses()
+    counts = db.margin_counts()
+    n_marks = sum(counts.values())
+    n_reqs = db.open_request_count()
+
+    if s == 1:
+        stage_body = f"""
+<p class="stage-kicker">Briefing Deck · Slide 1 of {total_slides} · {esc(meta['jurisdiction'])}</p>
+<h1 class="stage-title">{esc(meta['short_title'])}</h1>
+<p class="stage-thesis">{esc(meta['thesis'])}</p>
+<div class="stage-metrics">
+  <div><b>{len(all_clauses)}</b><span>Statutory clauses across Titles I–IV</span></div>
+  <div><b>1.18%</b><span>Modeled base cost ($15.33/mo at $1,300 rent)</span></div>
+  <div><b>0</b><span>Subrogation or clawback debt against tenants</span></div>
+  <div><b>{n_marks}</b><span>Public docket marks read into the open record</span></div>
+</div>"""
+    elif s == 2:
+        stage_body = f"""
+<p class="stage-kicker">Slide 2 of {total_slides} · Empirical Problem Statement</p>
+<h1 class="stage-title">Why the current deposit &amp; eviction cycle fails both sides</h1>
+<div class="stage-grid2">
+  <div class="stage-box">
+    <p class="stage-big">23,282 – 25,847</p>
+    <p><b>Annual Minnesota eviction filings</b> (MN Judicial Branch, 2023–2024).
+    <b>44.6%</b> of filings concentrate in repeat/serial filings (Eviction Lab).</p>
+  </div>
+  <div class="stage-box">
+    <p class="stage-big">$5,600 – $7,400</p>
+    <p><b>Direct provider loss per completed eviction</b> (turnover, arrears, court &amp; vacancy —
+    Harris County i4J benchmark).</p>
+  </div>
+  <div class="stage-box">
+    <p class="stage-big">$9 Billion</p>
+    <p><b>U.S. rental &amp; surety debt</b> flagged by CFPB: private “zero-deposit” bonds charge fees
+    and still pursue renters through collection.</p>
+  </div>
+  <div class="stage-box">
+    <p class="stage-big">Since 2007</p>
+    <p><b>UK Tenancy Deposit Protection</b> has proven custodial escrow + free neutral adjudication
+    works at national scale off pooled interest float.</p>
+  </div>
+</div>"""
+    elif s == 3:
+        stage_body = f"""
+<p class="stage-kicker">Slide 3 of {total_slides} · Title I — Amends Minn. Stat. § 504B.178</p>
+<h1 class="stage-title">Custodial Deposit Escrow &amp; Neutral Adjudication</h1>
+<div class="stage-grid2">
+  <div class="stage-box">
+    <h3>I-1 · Neutral custody for the tenancy</h3>
+    <p>Every security deposit enters bonded escrow at lease signing. Landlords never hold, commingle,
+    or unilaterally deduct from deposits.</p>
+  </div>
+  <div class="stage-box">
+    <h3>I-2 &amp; I-3 · Independent referee + free renter lane</h3>
+    <p>Move-out claims are decided on photo/document evidence by an administrative adjudicator — neither
+    the landlord nor the carrier decides.</p>
+  </div>
+  <div class="stage-box">
+    <h3>I-5 · Statutory 1% + clean-year dividend</h3>
+    <p>Tenants keep their guaranteed 1% annual interest plus a mutual surplus dividend after claims-free years.</p>
+  </div>
+  <div class="stage-box">
+    <h3>I-8 · Self-funded via ~3% net float (~$23.4M/yr)</h3>
+    <p>4% Treasury yield less 1% tenant interest yields ~$39/unit/yr (~$3.25/mo) to fund escrow and adjudication.</p>
+  </div>
+</div>"""
+    elif s == 4:
+        stage_body = f"""
+<p class="stage-kicker">Slide 4 of {total_slides} · Title II — Three-Source Funding Braid</p>
+<h1 class="stage-title">How Rent Assurance Is Paid For (Live Model)</h1>
+<form method="get" action="/present" class="stage-calc-bar" id="braidForm">
+  <input type="hidden" name="s" value="4">
+  <label>Monthly rent:
+    <input type="range" min="700" max="3000" step="50" value="{int(braid['monthly_rent'])}" id="rentRange">
+    <input type="number" name="rent" id="rentInput" value="{int(braid['monthly_rent'])}" step="50" min="400" max="10000">
+  </label>
+  <input type="hidden" id="unitsInput" value="1">
+  <input type="checkbox" id="m1prInput" checked hidden>
+</form>
+<div class="stage-metrics">
+  <div><b id="valFloat">${braid['deposit_float_mo']:.2f}/mo</b><span>1. Custodial deposit float (3% net)</span></div>
+  <div><b id="valRenter">${braid['renter_share_mo']:.2f}/mo</b><span>2. MN Renter's Credit monthly advance ($0 new OOP up to $77.5K income)</span></div>
+  <div><b id="valLandlord">${braid['landlord_match_mo']:.2f}/mo</b><span>3. Landlord matched share (earns clean-book dividend)</span></div>
+  <div><b id="valTotal">${braid['total_pool_mo']:.2f}/mo</b><span>Combined pool (~1.18% of rent · zero subrogation)</span></div>
+</div>"""
+    elif s == 5:
+        d_cards = "".join(
+            f'<div class="stage-box compact"><b>{d["num"]}. {esc(d["title"])}</b>'
+            f'<p class="quiet">{esc(d["why"])} ({esc(d["clause"])})</p></div>'
+            for d in db.decisions()
+        )
+        stage_body = f"""
+<p class="stage-kicker">Slide 5 of {total_slides} · Fairness Axiom &amp; Structural Locks</p>
+<h1 class="stage-title">Eight Non-Negotiable Safeguards</h1>
+<div class="stage-grid4">{d_cards}</div>"""
+    elif s == 6:
+        stage_body = f"""
+<p class="stage-kicker">Slide 6 of {total_slides} · Fiscal Discipline &amp; Rollout Sequence</p>
+<h1 class="stage-title">Stress-Tested Numbers &amp; MHFA Pilot Path</h1>
+<div class="stage-grid2">
+  <div class="stage-box">
+    <h3>Three modeled loss regimes (at $1,300 rent)</h3>
+    <p><b>Base case (1.18%):</b> $15.33 / unit / mo (~$106M claims)</p>
+    <p><b>+30% Fraud / hazard shock (1.63%):</b> $21.23 / unit / mo</p>
+    <p><b>6% Recession default shock (2.31%):</b> $30.00 / unit / mo</p>
+    <p class="quiet">Normal years build ~$4M/yr in dedicated reserves.</p>
+  </div>
+  <div class="stage-box">
+    <h3>Clause II-6 &amp; IV-4 · Prove it first, sunset if it misses</h3>
+    <p><b>Step 1:</b> MHFA operates Title II as a pilot on LIHTC subsidized properties using existing compliance rails.</p>
+    <p><b>Step 2:</b> Audited pilot loss data forms the official fiscal note for statewide rollout.</p>
+    <p><b>Step 3:</b> Mandatory Year-3 committee audit + hard 5-year statutory sunset.</p>
+  </div>
+</div>"""
+    elif s == 7:
+        foc = db.clause(clause_id or "I-4") or all_clauses[0]
+        pills = "".join(
+            f'<a class="stage-cpill{" on" if c["id"] == foc["id"] else ""}" '
+            f'href="/present?s=7&c={esc(c["id"])}">{esc(c["id"])}</a>'
+            for c in all_clauses
+        )
+        stage_body = f"""
+<p class="stage-kicker">Slide 7 of {total_slides} · Live Clause Q&amp;A Browser</p>
+<div class="stage-cpills">{pills}</div>
+<div class="stage-box" style="margin-top:18px">
+  <h2>{esc(foc['id'])} — {esc(foc['heading'])} {_status(foc['status'])}</h2>
+  <p style="margin:12px 0">{esc(foc['statute_text'])}</p>
+  <p class="plain"><b>In plain language:</b> {esc(foc['plain_text'] or '')}</p>
+</div>"""
+    else:
+        recent_marks = db.marks(status="read_in")[-3:]
+        m_list = "".join(
+            f'<div class="stage-box compact">'
+            f'<p class="mno"><b>{esc(m["public_no"])}</b> on <b>{esc(m["clause_id"] or "general")}</b> · {esc(m["author_label"] or "unsigned")}</p>'
+            f'<p>{esc(m["body"])}</p>'
+            f'{"<p class=quiet><b>Answer:</b> " + esc(m["response_body"]) + "</p>" if m["response_body"] else ""}'
+            f'</div>'
+            for m in reversed(recent_marks)
+        )
+        stage_body = f"""
+<p class="stage-kicker">Slide 8 of {total_slides} · Live Public Docket &amp; Next Steps</p>
+<h1 class="stage-title">Open Ledger: {n_marks} Marks Read In · {n_reqs} Active Requests</h1>
+<div class="stage-grid3">{m_list}</div>
+<p class="stage-cta">Add a clause mark at <b>/mark</b> · Request a briefing or amendment at <b>/requests</b> · Inspect every source at <b>/claims</b>.</p>"""
+
+    prev_s = max(1, s - 1)
+    next_s = min(total_slides, s + 1)
+    dots = [(f"{i}", f"/present?s={i}", "pill-on" if i == s else "pill")
+            for i in range(1, total_slides + 1)]
+
+    body = f"""
+<article class="stage-slide" data-slide="{s}" data-total="{total_slides}">
+  {stage_body}
+  <nav class="stage-foot pnav" aria-label="Slide controls">
+    <a class="pnav-btn" id="prevSlide" href="/present?s={prev_s}">{'← Previous' if s > 1 else 'Start'}</a>
+    <span class="quiet">Use ← / → arrow keys, 1–8, F for fullscreen, or Esc for Desk</span>
+    <a class="pnav-btn" id="nextSlide" href="/present?s={next_s}">{'Next slide →' if s < total_slides else 'Done'}</a>
+  </nav>
+</article>"""
+
+    actions = [
+        ("← Prev", f"/present?s={prev_s}", "link"),
+        *dots,
+        ("Next →", f"/present?s={next_s}", "primary"),
+        ("Exit to Desk", "/mode/desk?next=/", "link"),
+    ]
+    ctx_tv = dict(ctx)
+    ctx_tv["mode"] = "tv"
+    return page(f"Presentation ({s}/{total_slides})", body, ctx_tv, actions,
+                "Stage controls", is_stage=True)
 
 
 def mark_form_page(cid: str | None, re_no: str | None, quote: str | None,
-                   mode: str, path: str) -> bytes:
+                   kind_sel: str | None, ctx: dict) -> bytes:
     body = f"""
 <header class="mast"><h1>The Inkwell</h1>
 <p class="lede">Every mark is numbered, dated, and attached to a clause.
-It lands in intake first — a person reads it in, and only then does it
+It lands in dark intake first — a steward reads it in, and only then does it
 stand on the public ledger.</p></header>
-<section class="markform">{_mark_form(cid, re_no, quote)}</section>"""
-    return page("The Inkwell", body, mode, path, [
+<section class="markform">{_mark_form(cid, re_no, quote, kind_sel)}</section>"""
+    return page("The Inkwell", body, ctx, [
         ("The draft", "/bill", "link"),
         ("The margin", "/margin", "link"),
-        ("Intake queue", "/intake", "link"),
-    ])
+        ("Requests", "/requests", "link"),
+    ], "Inkwell actions")
 
 
-def margin(mode: str, path: str) -> bytes:
+def margin(posted: bool, ctx: dict) -> bytes:
     rows = db.marks(status="read_in")
+    banner = (
+        '<div class="notice-ok" role="status"><b>Received into intake.</b> '
+        'Your mark stays dark until a steward reads it into the public ledger '
+        'and assigns its M-number.</div>'
+        if posted else ""
+    )
     items = "".join(_mark_html(m) for m in rows) or (
         '<p class="quiet">The ledger is empty. Marks enter through the '
         'Inkwell and are read in from the intake queue.</p>')
     n = db.queue_count()
     body = f"""
+{banner}
 <header class="mast"><h1>The margin</h1>
 <p class="lede">The public ledger — every mark read in, numbered and
-dated, attached to its clause. The record does not erase; it amends in
-the open.</p></header>
+dated, attached to its clause. Answers cite earlier marks by reference
+(<i>re: M-0001</i>). The record does not erase; it amends in the open.</p></header>
 {items}"""
-    return page("The Margin", body, mode, path, [
+    acts = [
         ("New mark", "/mark", "primary"),
-        (f"Intake queue ({n})", "/intake", "link"),
+        (f"Intake queue ({n})", "/intake", "pill-on" if (ctx["steward"] and n) else "link"),
         ("The draft", "/bill", "link"),
-    ])
+    ]
+    return page("The Margin", body, ctx, acts, "Margin docket tools")
 
 
-def intake(mode: str, path: str) -> bytes:
+def intake(ctx: dict) -> bytes:
+    n_queued = db.queue_count()
+    held = db.marks(status="held")
+    crisis = db.marks(status="crisis_routed")
+
+    if not ctx["steward"]:
+        nxt = urllib.parse.quote("/intake", safe="")
+        unlock_href = f"/steward/toggle?next={nxt}" if ctx.get("onetap") else f"/steward?next={nxt}"
+        body = f"""
+<header class="mast"><h1>Intake queue (dark gate)</h1>
+<p class="lede">Unscreened marks never display publicly — protecting against
+accidental personal details, spam, and housing emergencies hitting a comment box.</p></header>
+<section class="gate-box">
+  <p><b>{n_queued}</b> mark(s) currently wait for steward read-in ·
+  Held: {len(held)} · Crisis-routed: {len(crisis)}.</p>
+  <p class="quiet">Unlock Steward mode to review queued items, write official
+  Drafting Table answers, read marks into the public Margin, or crisis-route.</p>
+  <p><a class="btn" href="{unlock_href}" style="display:inline-block;text-decoration:none">Unlock Steward triage</a></p>
+</section>"""
+        return page("Intake (Locked)", body, ctx, [
+            ("Unlock Steward", unlock_href, "primary"),
+            ("Public margin", "/margin", "link"),
+            ("The draft", "/bill", "link"),
+        ], "Intake gate")
+
     rows = db.marks(status="queued")
     items = "".join(f"""
 <article class="mark intake">
-  <p class="mno"><b>#{m['id']}</b> · {esc(m['created_at'])} ·
+  <p class="mno"><b>Intake #{m['id']}</b> · {esc(m['created_at'])} ·
     {KIND_WORDS.get(m['kind'], 'comment')} · {_clause_label(m['clause_id'])}
     {" · " + esc(m["author_label"]) if m["author_label"] else " · unsigned"}</p>
   {'<blockquote class="quote">“' + esc(m["quote_text"]) + '”</blockquote>' if m["quote_text"] else ""}
@@ -410,107 +873,152 @@ def intake(mode: str, path: str) -> bytes:
   <p>{esc(m['body'])}</p>
   <form method="post" action="/api/mark_action" class="stack">
     <input type="hidden" name="id" value="{m['id']}">
-    <label>Answer in the open <span class="quiet">(optional — enters the record with the mark)</span>
-      <input name="response" placeholder="The drafting table's public answer."></label>
+    <div class="row">
+      <label>Answer in the open <span class="quiet">(optional — publishes alongside mark)</span>
+        <input name="response" placeholder="The drafting table's public answer."></label>
+      <label>Responder role
+        <input name="responder" value="Drafting Table"></label>
+    </div>
     <div class="acts">
-      <button name="action" value="read_in" class="btn">Read in</button>
+      <button name="action" value="read_in" class="btn">Read in (assign M-number)</button>
       <button name="action" value="held" class="btn ghost">Hold</button>
       <button name="action" value="crisis_routed" class="btn ghost">Crisis route</button>
     </div>
   </form>
 </article>""" for m in rows) or (
         '<p class="quiet">The queue is empty — nothing waits for read-in.</p>')
-    held = db.marks(status="held")
-    crisis = db.marks(status="crisis_routed")
+
     body = f"""
-<header class="mast"><h1>Intake queue</h1>
-<p class="lede">What lands here is dark until a person reads it in.
-<b>Read in</b> gives it a public number — answer in the open and the
-answer enters the record beside it. <b>Hold</b> sets it aside.
-<b>Crisis route</b> counts it and keeps it off the ledger — someone in
-trouble gets pointed at help, not published.</p></header>
+<header class="mast"><h1>Intake queue (Steward active)</h1>
+<p class="lede">What lands here is dark until you read it in.
+<b>Read in</b> assigns its permanent M-number. <b>Hold</b> sets it aside.
+<b>Crisis route</b> counts it and keeps it off the public ledger.</p></header>
 {items}
 <p class="quiet">Held: {len(held)} · Crisis-routed: {len(crisis)}</p>"""
-    return page("Intake", body, mode, path, [
-        ("The margin", "/margin", "primary"),
-        ("Requests", "/requests", "link"),
-        ("The draft", "/bill", "link"),
-    ])
+    return page("Intake", body, ctx, [
+        ("Public margin", "/margin", "primary"),
+        ("Requests desk", "/requests", "link"),
+        ("Lock Steward", "/steward/lock?next=/intake", "pill"),
+    ], "Steward triage tools")
 
 
-def requests_desk(clause_id: str | None, mode: str, path: str) -> bytes:
+def steward_page(nxt: str, err: bool, ctx: dict) -> bytes:
+    err_html = ('<p class="notice-err" role="alert">Passcode did not match. '
+                'Check BILL_STEWARD_CODE (default local code: <code>mn-steward</code>).</p>'
+                if err else "")
+    onetap = (
+        f'<p class="quiet">Running locally on loopback: you can also use '
+        f'<a href="/steward/toggle?next={urllib.parse.quote(nxt, safe="")}">1-tap local unlock</a>.</p>'
+        if ctx.get("onetap") else ""
+    )
+    body = f"""
+<header class="mast"><h1>Steward unlock</h1>
+<p class="lede">Public readers browse, calculate, post marks, and file
+requests with zero login. Steward mode unlocks intake read-in, official
+answers, and request status updates.</p></header>
+{err_html}
+<form method="post" action="/api/steward" class="stack" style="max-width:26rem">
+  <input type="hidden" name="next" value="{esc(nxt)}">
+  <label>Steward passcode
+    <input type="password" name="code" required autofocus placeholder="Enter steward passcode"></label>
+  <button class="btn" type="submit">Unlock Steward mode</button>
+</form>
+{onetap}"""
+    return page("Steward Unlock", body, ctx, [
+        ("Back", nxt, "link"),
+        ("Desk", "/", "link"),
+    ], "Steward authentication")
+
+
+def requests_desk(clause_id: str | None, ctx: dict) -> bytes:
     rows = db.requests()
+
     def row(r):
         nxt = REQ_NEXT.get(r["status"])
-        acts = []
-        if nxt:
-            acts.append(
-                f'<button name="status" value="{nxt}" class="btn">'
-                f'Mark {STATUS_WORDS[nxt]}</button>')
-        if r["status"] not in ("incorporated", "declined"):
-            acts.append('<button name="status" value="declined" '
-                        'class="btn ghost">Decline</button>')
-        note = (f'<p class="quiet">steward: {esc(r["steward_note"])}</p>'
+        acts_html = ""
+        if ctx["steward"]:
+            acts = []
+            if nxt:
+                acts.append(
+                    f'<button name="status" value="{nxt}" class="btn">'
+                    f'Mark {STATUS_WORDS[nxt]}</button>')
+            if r["status"] not in ("incorporated", "declined"):
+                acts.append('<button name="status" value="declined" '
+                            'class="btn ghost">Decline</button>')
+            if acts:
+                acts_html = (
+                    f'<form method="post" action="/api/request_status" class="acts">'
+                    f'<input type="hidden" name="id" value="{r["id"]}">'
+                    f'<input name="note" placeholder="Optional steward note" class="inline-note">'
+                    f'{"".join(acts)}</form>'
+                )
+        note = (f'<p class="quiet"><b>Steward note:</b> {esc(r["steward_note"])}</p>'
                 if r["steward_note"] else "")
         org = f' · {esc(r["org_or_role"])}' if r["org_or_role"] else ""
         return f"""
-<article class="req">
+<article class="req" id="{esc(r['public_no'])}">
   <p class="mno"><b>{esc(r['public_no'])}</b> · {esc(r['req_type'])} ·
     {_status(r['status'])} · {_status(r['stance'])}{org} ·
     {_clause_label(r['clause_id'])}</p>
   <p><b>{esc(r['summary'])}</b>
     {' — ' + esc(r['details']) if r['details'] else ''}</p>
   {note}
-  <form method="post" action="/api/request_status" class="acts">
-    <input type="hidden" name="id" value="{r['id']}">{''.join(acts)}
-  </form>
+  {acts_html}
 </article>"""
+
     items = "".join(row(r) for r in rows) or (
         '<p class="quiet">No requests yet — the desk is clear.</p>')
-    options = ['<option value="">— no clause —</option>'] + [
+    options = ['<option value="">— whole bill / no specific clause —</option>'] + [
         f'<option value="{esc(c["id"])}"'
         f'{" selected" if c["id"] == clause_id else ""}>'
         f'{esc(c["id"])} — {esc(c["heading"])}</option>'
         for c in db.clauses()]
+    steward_hint = (
+        "" if ctx["steward"]
+        else '<p class="quiet">Status updates require Steward mode (top right).</p>'
+    )
     body = f"""
 <header class="mast"><h1>Requests desk</h1>
-<p class="lede">What people ask of the draft — briefings, amendments,
-positions, questions — one pipeline: <b>new → reviewing → scheduled →
-incorporated</b>. Declined is a verdict, not a graveyard: it stays on
-the record.</p></header>
+<p class="lede">Briefings, statutory amendments, organizational positions, and
+questions — tracked openly through <b>new → reviewing → scheduled →
+incorporated</b>. Contact info stays private to stewards.</p>
+{steward_hint}</header>
 <section id="new" class="markform">
-  <h2>New request</h2>
+  <h2>Submit a request</h2>
   <form method="post" action="/api/request" class="stack">
     <div class="row">
       <label>Type<select name="req_type">
-        <option value="briefing">Briefing / walkthrough</option>
-        <option value="amendment">Amendment</option>
-        <option value="position">Position</option>
-        <option value="question">Question</option>
+        <option value="briefing">Briefing / fiscal walkthrough</option>
+        <option value="amendment">Statutory amendment</option>
+        <option value="position">Organization position</option>
+        <option value="question">Technical question</option>
         <option value="other">Other</option>
       </select></label>
       <label>Clause<select name="clause_id">{''.join(options)}</select></label>
     </div>
     <label>Who is asking<input name="org_or_role"
-      placeholder="Office, organization, or role"></label>
-    <label>The ask<input name="summary" required
-      placeholder="One sentence — what is being asked?"></label>
-    <label>Detail<textarea name="details" rows="3"
-      placeholder="Optional — the reasoning, the source, the deadline."></textarea></label>
-    <label>Contact <span class="quiet">(steward-only — never shown)</span>
-      <input name="contact" autocomplete="off"></label>
-    <button class="btn" type="submit">Enter the request</button>
+      placeholder="Office, organization, or role (e.g. Housing Committee Staff, 12-unit Owner)"></label>
+    <label>One-line summary<input name="summary" required
+      placeholder="One clear sentence — what is being requested?"></label>
+    <label>Detail &amp; reasoning<textarea name="details" rows="3"
+      placeholder="Optional — background, source citation, or timing window."></textarea></label>
+    <label>Contact <span class="quiet">(steward-only — never rendered on the site)</span>
+      <input name="contact" autocomplete="off" placeholder="Email or phone for scheduling"></label>
+    <button class="btn" type="submit">Submit request</button>
   </form>
 </section>
-{items}"""
-    return page("Requests", body, mode, path, [
-        ("New request", "/requests#new", "primary"),
+<section>
+  <h2>Open &amp; historical requests ({len(rows)})</h2>
+  {items}
+</section>"""
+    return page("Requests", body, ctx, [
+        ("Submit request", "/requests#new", "primary"),
+        ("Positions", "/positions", "link"),
         ("The draft", "/bill", "link"),
-        ("Intake queue", "/intake", "link"),
-    ])
+    ], "Requests desk tools")
 
 
-def positions(mode: str, path: str) -> bytes:
+def positions(ctx: dict) -> bytes:
     rows = db.positions()
     items = "".join(f"""
 <article class="mark">
@@ -518,19 +1026,16 @@ def positions(mode: str, path: str) -> bytes:
     {esc(p['noted_at'])}{' · ' + esc(p['source']) if p['source'] else ''}</p>
   <p>{esc(p['provision'])}</p>
 </article>""" for p in rows) or (
-        '<p class="quiet">No positions recorded yet. Silence is a position '
-        'too — after the window, it is recorded as such.</p>')
+        '<p class="quiet">No positions recorded yet.</p>')
     body = f"""
 <header class="mast"><h1>Who stands where</h1>
-<p class="lede">Person × provision × stance, dated. Every send and every
-answer lands here; refusing to engage is itself a position once the
-window closes.</p></header>
+<p class="lede">Organization or office × provision × stance, dated and sourced.</p></header>
 <section id="add" class="markform">
   <h2>Record a position</h2>
   <form method="post" action="/api/position" class="stack">
     <div class="row">
       <label>Who<input name="person" required
-        placeholder="Name or office"></label>
+        placeholder="Organization, coalition, or office"></label>
       <label>Stance<select name="stance">
         <option value="support">Supports</option>
         <option value="oppose">Opposes</option>
@@ -539,46 +1044,45 @@ window closes.</p></header>
         <option value="watching">Watching</option>
       </select></label>
     </div>
-    <label>On what<input name="provision" required
-      placeholder="e.g. Title II funding braid, or the whole draft"></label>
-    <label>Source<input name="source"
-      placeholder="Optional — email, meeting, call (dated)"></label>
-    <button class="btn" type="submit">Record</button>
+    <label>On what provision<input name="provision" required
+      placeholder="e.g. Title I custodial escrow, Title II funding braid, or whole draft"></label>
+    <label>Public source<input name="source"
+      placeholder="Optional — letter, testimony, meeting date"></label>
+    <button class="btn" type="submit">Record position</button>
   </form>
 </section>
 {items}"""
-    return page("Positions", body, mode, path, [
+    return page("Positions", body, ctx, [
         ("Add position", "/positions#add", "primary"),
-        ("The draft", "/bill", "link"),
         ("Requests", "/requests", "link"),
-    ])
+        ("The draft", "/bill", "link"),
+    ], "Positions ledger tools")
 
 
-def claims(mode: str, path: str) -> bytes:
+def claims(ctx: dict) -> bytes:
     rows = db.claims()
     items = "".join(f"""
-<article class="mark">
-  <p class="mno"><b>{esc(c['figure'])}</b> · {_status(c['status'])}
+<article class="mark" id="{esc(c['id'])}">
+  <p class="mno"><b>{esc(c['id'])} · {esc(c['figure'])}</b> · {_status(c['status'])}
     {' · checked ' + esc(c['checked']) if c['checked'] else ''}</p>
   <p>{esc(c['claim'])}</p>
   <p class="quiet">{esc(c['source'] or 'internal derivation')}
     {' — ' + esc(c['derivation']) if c['derivation'] else ''}</p>
 </article>""" for c in rows)
     body = f"""
-<header class="mast"><h1>Claims ledger</h1>
-<p class="lede">Every figure the campaign says out loud, with its status.
-<b>Verified</b> means checked against a named source. <b>Estimate</b>
-means derived, derivation shown, awaiting review. Nothing unverified
-ships as fact.</p></header>
+<header class="mast"><h1>Claims &amp; verification ledger</h1>
+<p class="lede">Every figure the platform cites, with its check status.
+<b>Verified</b> means checked against a named statutory, court, or agency source.
+<b>Estimate</b> means derived openly and awaiting formal actuarial sign-off.</p></header>
 {items}"""
-    return page("Claims", body, mode, path, [
-        ("The draft", "/bill", "primary"),
-        ("Decisions", "/decisions", "link"),
-        ("Editions", "/editions", "link"),
-    ])
+    return page("Claims", body, ctx, [
+        ("Funding calculator", "/calculator", "primary"),
+        ("The draft", "/bill", "link"),
+        ("Locked decisions", "/decisions", "link"),
+    ], "Verification tools")
 
 
-def decisions(mode: str, path: str) -> bytes:
+def decisions(ctx: dict) -> bytes:
     items = "".join(f"""
 <article class="mark">
   <p class="mno"><b>Decision {d['num']}</b> · {_clause_label(d['clause'])} ·
@@ -587,18 +1091,17 @@ def decisions(mode: str, path: str) -> bytes:
 </article>""" for d in db.decisions())
     body = f"""
 <header class="mast"><h1>Locked decisions</h1>
-<p class="lede">The design calls that hold the draft up — locked, never
-relitigated quietly. A change here goes through the record like
-everything else.</p></header>
+<p class="lede">The eight architectural safeguards that hold the draft together —
+locked in public so any change must happen openly on the record.</p></header>
 {items}"""
-    return page("Decisions", body, mode, path, [
+    return page("Decisions", body, ctx, [
         ("The draft", "/bill", "primary"),
         ("Claims", "/claims", "link"),
-        ("The margin", "/margin", "link"),
-    ])
+        ("Editions", "/editions", "link"),
+    ], "Decision record tools")
 
 
-def editions(mode: str, path: str) -> bytes:
+def editions(ctx: dict) -> bytes:
     rows = db.editions()
     items = "".join(
         f'<article class="mark"><p class="mno"><b>{esc(e["edition"])}</b> · '
@@ -607,18 +1110,16 @@ def editions(mode: str, path: str) -> bytes:
         f"<p>{esc(e['change'])}</p></article>" for e in reversed(rows))
     body = f"""
 <header class="mast"><h1>Editions</h1>
-<p class="lede">The change ledger — how the draft got here, newest first.
-The record does not erase; it amends in the open.</p></header>
+<p class="lede">The dated change ledger (E-01 through E-09), newest first.</p></header>
 {items}"""
-    return page("Editions", body, mode, path, [
+    return page("Editions", body, ctx, [
         ("The draft", "/bill", "primary"),
         ("The margin", "/margin", "link"),
-        ("Positions", "/positions", "link"),
-    ])
+        ("Decisions", "/decisions", "link"),
+    ], "Change history tools")
 
 
-def not_found(mode: str, path: str) -> bytes:
-    body = '<header class="mast"><h1>Not found</h1>' \
-           '<p class="lede">That page is not part of this desk.</p></header>'
-    return page("Not found", body, mode, path,
-                [("Desk", "/", "primary")])
+def not_found(ctx: dict) -> bytes:
+    body = ('<header class="mast"><h1>Not found</h1>'
+            '<p class="lede">That route is not part of this platform.</p></header>')
+    return page("Not found", body, ctx, [("Desk", "/", "primary")])

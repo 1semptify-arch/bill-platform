@@ -2,17 +2,25 @@
 """selfcheck.py — end-to-end verification for the Bill Platform.
 
 Boots the real server on an ephemeral loopback port against a throwaway
-database (seeded identically to production), then drives every route and
-every write path over HTTP: mark intake → read-in → public ledger with
-drafter answer, reply-by-reference, hold/crisis, request pipeline,
-positions, mode switch, and the smart-toolbar context actions.
+database (seeded identically to production), then drives every route,
+screen mode, calculator endpoint, steward security gate, and write path
+over HTTP:
+  - Desk reading spine + 2-column desktop rail
+  - Bill reader + Audience Lens + Plain/Statute toggle
+  - Live 3-source Funding Braid calculator + /api/calculate math check
+  - Dedicated 8-slide 16:9 TV / Presentation Stage (/present + /tv)
+  - Mobile / Tablet mode + thumb-zone bottom navigation bar
+  - Steward gate: dark intake when locked (403 on triage POSTs), 1-tap &
+    passcode unlock, read-in -> M-number + drafter answer, citation reply,
+    crisis routing, request pipeline, positions, and PII redaction.
 
     python selfcheck.py
 
-Exits 0 with a PASS line, non-zero on the first failure. Stdlib only.
+Exits 0 with SELFCHECK PASS, non-zero on any failure. Stdlib only.
 """
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import threading
@@ -66,17 +74,21 @@ def main() -> int:
 
     raw = urllib.request.build_opener(NoRedirect())
 
-    def get_raw(path):
+    def get_raw(path, cookie=None):
         req = urllib.request.Request(base + path)
+        if cookie:
+            req.add_header("Cookie", cookie)
         try:
             with raw.open(req, timeout=10) as r:
                 return r.status, dict(r.headers)
         except urllib.error.HTTPError as e:
             return e.code, dict(e.headers)
 
-    def post(path, data):
+    def post(path, data, cookie=None):
         body = urllib.parse.urlencode(data).encode()
         req = urllib.request.Request(base + path, data=body, method="POST")
+        if cookie:
+            req.add_header("Cookie", cookie)
         try:
             with raw.open(req, timeout=10) as r:
                 return r.status, dict(r.headers)
@@ -93,148 +105,213 @@ def main() -> int:
                 (public_no,)).fetchone()["id"]
 
     try:
-        # ---- reads -----------------------------------------------------
+        # ---- 1. Desk & core reads --------------------------------------
         st, html, _ = get("/")
         check("GET / desk home (spine)", st == 200 and "Objective" in html
               and "Where it stands" in html and "Next action" in html)
-        check("home shows pipeline", "The pipeline" in html
-              and "Working Draft" in html)
+        check("home shows pipeline + desk rail", "The pipeline" in html
+              and "desk-rail" in html and "Working Draft" in html)
 
         st, html, _ = get("/bill")
-        check("GET /bill renders draft", st == 200
+        check("GET /bill renders 23 clauses", st == 200
               and "I-1" in html and "IV-5" in html
               and "Custodial escrow" in html)
         check("/bill annot links", 'href="/mark?c=II-3"' in html)
         check("/bill open tags", html.count("open drafting") >= 3)
         check("/bill plain language", "In plain language" in html)
 
+        st, html_lens, _ = get("/bill?lens=lawmaker&view=plain")
+        check("/bill lawmaker lens + plain view", st == 200
+              and "For lawmakers" in html_lens
+              and "statute-copy" not in html_lens)
+
         st, html, _ = get("/clause/II-3")
-        check("GET /clause/II-3", st == 200 and "three-source" in html
+        check("GET /clause/II-3", st == 200 and "Three-source" in html
               and "Mark this clause" in html)
         check("clause neighbours", 'href="/clause/II-2"' in html
               and 'href="/clause/II-4"' in html)
         check("clause notes + standing-on", "Renter:" in html
-              or "Standing on" in html)
+              and "Standing on" in html)
 
         st, html, _ = get("/clause/NOPE")
         check("GET /clause/bogus -> 404", st == 404)
 
-        for p in ("/margin", "/intake", "/requests", "/positions",
-                  "/claims", "/decisions", "/editions", "/mark"):
+        for p in ("/calculator", "/present", "/margin", "/intake",
+                  "/requests", "/positions", "/claims", "/decisions",
+                  "/editions", "/mark", "/steward"):
             st, html, _ = get(p)
             check(f"GET {p}", st == 200)
 
         st, html, _ = get("/editions")
         check("editions seeded (9 rows)", html.count(">E-0") == 9)
         st, html, _ = get("/claims")
-        check("claims seeded with figures", "$" in html and "verified" in html)
+        check("claims seeded with figures", "$15.33/mo" in html and "verified" in html)
         st, html, _ = get("/decisions")
         check("decisions locked (8)", html.count("Decision ") >= 8)
 
-        # context-aware toolbar differs by page
+        # ---- 2. Funding Braid Calculator & API math --------------------
+        st, calc_json, _ = get("/api/calculate?rent=1300&units=10&m1pr=1")
+        calc = json.loads(calc_json)
+        check("calculator base math ($1,300)", st == 200
+              and calc["deposit_float_mo"] == 3.25
+              and calc["total_pool_mo"] == 15.33
+              and calc["stress_fraud_mo"] == 21.23
+              and calc["stress_recession_mo"] == 30.0
+              and calc["renter_out_of_pocket_mo"] == 0.0)
+
+        st, calc_over, _ = get("/api/calculate?rent=2600&units=1&m1pr=0")
+        calc2 = json.loads(calc_over)
+        check("calculator scales with rent & over-cap M1PR", st == 200
+              and calc2["deposit_float_mo"] == 6.50
+              and calc2["total_pool_mo"] == 30.66
+              and calc2["renter_out_of_pocket_mo"] > 0)
+
+        # ---- 3. Context-Aware Smart Toolbar & 3 Screen Modes -----------
         st, h_bill, _ = get("/bill")
-        st, h_int, _ = get("/intake")
-        check("smart toolbar: bill vs intake differ",
-              "Mark the draft" in h_bill and "Mark the draft" not in h_int)
+        st, h_calc, _ = get("/calculator")
+        check("smart toolbar swaps actions per context",
+              "Mark the draft" in h_bill and "Renter lens" in h_bill
+              and "Mark the draft" not in h_calc and "$1,300 base" in h_calc)
 
-        # seeded margin: M-0001..M-0004 public, M-0005 still dark
+        st, hdrs = get_raw("/tv")
+        check("/tv sets bp_mode=tv & opens /present?s=1", st == 303
+              and "bp_mode=tv" in (hdrs.get("Set-Cookie") or "")
+              and hdrs.get("Location") == "/present?s=1")
+
+        for s_num in (1, 4, 7, 8):
+            st, s_html, _ = get(f"/present?s={s_num}", cookie="bp_mode=tv")
+            check(f"TV presentation slide {s_num}/8", st == 200
+                  and "stage-slide" in s_html and f"Slide {s_num} of 8" in s_html)
+
+        st, m_html, _ = get("/bill", cookie="bp_mode=mobile")
+        check("Mobile mode renders thumb-zone bottom bar", st == 200
+              and "mode-mobile" in m_html and 'class="mobile-bar"' in m_html)
+
+        # ---- 4. Steward Gate + Dark Intake -> Read-In -> Public Margin -
         st, html, _ = get("/margin")
-        check("seed margin has M-0001", "M-0001" in html)
-        check("queued seed mark NOT on margin", "M-0005" not in html)
-        st, html, _ = get("/intake")
-        check("queued seed mark in intake", st == 200)
+        check("seed margin has M-0001..M-0004", "M-0001" in html and "M-0004" in html)
+        check("queued seed mark NOT on margin", "Appellate Practitioner" not in html)
 
-        # ---- mode switch ------------------------------------------------
-        st, hdrs = get_raw("/mode/tv?next=/bill")
-        check("mode switch sets cookie + redirects", st == 303
-              and "bp_mode=tv" in (hdrs.get("Set-Cookie") or ""))
-        st, html, _ = get("/bill", cookie="bp_mode=tv")
-        check("tv mode renders", st == 200 and "mode-tv" in html)
-        st, html, _ = get("/bill", cookie="bp_mode=mobile")
-        check("mobile mode renders", st == 200 and "mode-mobile" in html)
-
-        # ---- marks: intake → read-in → ledger ---------------------------
+        # Submit new mark publicly (zero login required)
         st, _ = post("/api/mark", {
             "clause_id": "II-3", "kind": "question",
             "body": "The braid's split ratio needs the actuarial before "
                     "this can be priced — flag it on the clause page.",
             "name": "Test Reviewer", "contact": "t@example.org"})
-        check("POST /api/mark -> 303", st == 303)
+        check("POST /api/mark (public, zero login) -> 303", st == 303)
         mid = newest_queued_mark_id()
 
-        st, html, _ = get("/intake")
-        check("mark landed in intake (dark)", st == 200
-              and "actuarial" in html)
-        st, html, _ = get("/margin")
-        check("queued mark NOT on public margin", "actuarial" not in html)
+        # Without steward cookie, intake keeps queued text dark & blocks triage POSTs
+        st, locked_int, _ = get("/intake")
+        check("locked /intake hides raw queued mark body",
+              st == 200 and "Unlock Steward" in locked_int
+              and "actuarial before this can be priced" not in locked_int)
 
+        st, _ = post("/api/mark_action", {"id": mid, "action": "read_in"})
+        check("unauthenticated POST /api/mark_action -> 403", st == 403)
+        st, _ = post("/api/request_status", {"id": 1, "status": "reviewing"})
+        check("unauthenticated POST /api/request_status -> 403", st == 403)
+        st, _ = post("/api/steward", {"code": "wrong-passcode"})
+        check("wrong steward passcode -> 403", st == 403)
+
+        # Unlock Steward via passcode (and verify 1-tap loopback toggle)
+        st, st_hdrs = post("/api/steward", {"code": "mn-steward", "next": "/intake"})
+        steward_cookie = (st_hdrs.get("Set-Cookie") or "").split(";", 1)[0]
+        check("valid steward passcode sets bp_steward cookie",
+              st == 303 and steward_cookie.startswith("bp_steward="))
+
+        st, t_hdrs = get_raw("/steward/toggle?next=/intake")
+        check("loopback 1-tap /steward/toggle sets cookie",
+              st == 303 and "bp_steward=" in (t_hdrs.get("Set-Cookie") or ""))
+
+        st, open_int, _ = get("/intake", cookie=steward_cookie)
+        check("unlocked /intake reveals queued mark for triage",
+              st == 200 and "actuarial before this can be priced" in open_int)
+
+        st, html, _ = get("/margin")
+        check("queued mark still NOT on public margin",
+              "actuarial before this can be priced" not in html)
+
+        # Steward reads in mark with an official answer
         st, _ = post("/api/mark_action", {
             "id": mid, "action": "read_in",
-            "response": "Actuarial review is already scheduled with the "
-                        "fiscal staff — this mark is why."})
-        check("read-in assigns public number", st == 303)
+            "response": "Actuarial review is scheduled with fiscal staff.",
+            "responder": "Drafting Table",
+        }, cookie=steward_cookie)
+        check("steward read-in assigns M-number", st == 303)
+
         st, html, _ = get("/margin")
-        check("read-in mark on margin as M-0005", "M-0005" in html
-              and "actuarial" in html and "Test Reviewer" in html)
-        check("drafter answer published", "Drafting Table" in html)
-        check("contact never rendered", "t@example.org" not in html)
+        check("read-in mark on public margin as M-0005", "M-0005" in html
+              and "actuarial before this can be priced" in html
+              and "Test Reviewer" in html)
+        check("drafter answer published", "Actuarial review is scheduled" in html)
+        check("contact never rendered on margin", "t@example.org" not in html)
 
         st, html, _ = get("/clause/II-3")
         check("clause margin shows read-in mark", "M-0005" in html)
         st, html, _ = get("/bill")
         check("margin count badge on draft", 'class="mcount"' in html)
 
-        # reply-by-reference
+        # Reply-by-reference
         st, _ = post("/api/mark", {
             "clause_id": "II-3", "body": "Agreed — flag it.",
             "reply_to": "M-0005", "name": ""})
         rid = newest_queued_mark_id()
-        st, _ = post("/api/mark_action", {"id": rid, "action": "read_in"})
+        st, _ = post("/api/mark_action", {"id": rid, "action": "read_in"},
+                     cookie=steward_cookie)
         st, html, _ = get("/margin")
-        check("reply cites by reference", "re: M-0005" in html
-              and "M-0006" in html)
+        check("reply cites by reference", "M-0005" in html and "M-0006" in html)
 
-        # hold + crisis path
-        st, _ = post("/api/mark", {"body": "spam my landlord story"})
+        # Crisis routing keeps personal emergency off public ledger
+        st, _ = post("/api/mark", {"body": "emergency eviction tomorrow help"})
         cid = newest_queued_mark_id()
-        st, _ = post("/api/mark_action", {"id": cid, "action": "crisis_routed"})
+        st, _ = post("/api/mark_action", {"id": cid, "action": "crisis_routed"},
+                     cookie=steward_cookie)
         st, html, _ = get("/margin")
-        check("crisis mark never public", "spam my landlord" not in html)
+        check("crisis-routed mark never public",
+              "emergency eviction tomorrow" not in html)
 
-        # ---- requests desk ----------------------------------------------
+        # ---- 5. Requests Desk + Steward Status Pipeline ----------------
         st, _ = post("/api/request", {
             "req_type": "amendment", "summary": "Pin the II-3 split ratio",
             "details": "Needed before the actuarial ask lands.",
-            "clause_id": "II-3", "org_or_role": "Test Office"})
-        check("POST /api/request", st == 303)
+            "clause_id": "II-3", "org_or_role": "Test Office",
+            "contact": "private-req@example.org"})
+        check("POST /api/request (public) -> 303", st == 303)
         rq = request_id("R-0004")
-        st, _ = post("/api/request_status", {"id": rq, "status": "reviewing"})
-        st, _ = post("/api/request_status", {"id": rq, "status": "scheduled"})
         st, _ = post("/api/request_status",
-                     {"id": rq, "status": "incorporated"})
+                     {"id": rq, "status": "reviewing", "note": "Scoped"},
+                     cookie=steward_cookie)
+        st, _ = post("/api/request_status", {"id": rq, "status": "scheduled"},
+                     cookie=steward_cookie)
+        st, _ = post("/api/request_status", {"id": rq, "status": "incorporated"},
+                     cookie=steward_cookie)
         st, html, _ = get("/requests")
         check("request pipeline new->incorporated",
               "Pin the II-3 split ratio" in html and "incorporated" in html
-              and "R-0004" in html)
-        check("seeded requests render", "R-0001" in html)
+              and "R-0004" in html and "Scoped" in html)
+        check("request contact never rendered", "private-req@example.org" not in html)
 
-        # ---- positions --------------------------------------------------
+        # ---- 6. Positions + Static + Sanitized State Snapshot ----------
         st, _ = post("/api/position", {
             "person": "Rep. Example", "provision": "Title II funding braid",
             "stance": "watching", "source": "email 2026-11-10"})
         st, html, _ = get("/positions")
-        check("position recorded", "Rep. Example" in html
-              and "watching" in html)
-        check("seeded position renders",
-              "Mediation Coalition" in html)
+        check("position recorded", "Rep. Example" in html and "watching" in html)
 
-        # ---- static + misc ----------------------------------------------
         st, css, _ = get("/static/platform.css")
-        check("static css", st == 200 and "mode-tv" in css)
+        check("static css", st == 200 and "stage-slide" in css and "mobile-bar" in css)
         st, js, _ = get("/static/platform.js")
-        check("static js", st == 200 and "selectionchange" in js)
-        st, html, _ = get("/api/state")
-        check("api/state snapshot", st == 200 and '"clauses"' in html)
+        check("static js", st == 200 and "recomputeBraid" in js and "selectionchange" in js)
+
+        st, snap_pub, _ = get("/api/state")
+        pub_data = json.loads(snap_pub)
+        check("/api/state hides queued marks & contacts publicly",
+              st == 200
+              and all(m["status"] == "read_in" for m in pub_data["marks"])
+              and "t@example.org" not in snap_pub
+              and "private-req@example.org" not in snap_pub)
+
         st, html, _ = get("/nope")
         check("404 page", st == 404)
 
@@ -246,7 +323,7 @@ def main() -> int:
     if FAILS:
         print(f"SELFCHECK FAILED — {len(FAILS)} check(s): {', '.join(FAILS)}")
         return 1
-    print("SELFCHECK PASS — all routes, writes, modes, and boards verified.")
+    print("SELFCHECK PASS — all routes, 3 screen modes, smart toolbars, calculator, steward gates, and boards verified.")
     return 0
 
 

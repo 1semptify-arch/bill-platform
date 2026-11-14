@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS clauses (
     renter_note   TEXT,
     provider_note TEXT,
     lawmaker_note TEXT,
+    audiences     TEXT,
     refs          TEXT
 );
 CREATE TABLE IF NOT EXISTS claims (
@@ -170,10 +171,11 @@ def _seed(con: sqlite3.Connection) -> None:
     con.executemany(
         "INSERT OR IGNORE INTO clauses (id, ord, title_num, heading, status,"
         " statute_text, plain_text, renter_note, provider_note,"
-        " lawmaker_note, refs) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        " lawmaker_note, audiences, refs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         [(c["id"], i, c["title_num"], c["heading"], c["status"],
           c["statute_text"], c.get("plain_text"), c.get("renter_note"),
           c.get("provider_note"), c.get("lawmaker_note"),
+          ",".join(c.get("audiences") or ["renter", "provider", "lawmaker"]),
           ",".join(c.get("refs") or []))
          for i, c in enumerate(seed_data.CLAUSES)])
     con.executemany(
@@ -243,6 +245,14 @@ def _seed(con: sqlite3.Connection) -> None:
 def init(path: Path | None = None) -> None:
     with connect(path) as con:
         con.executescript(SCHEMA)
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(clauses)").fetchall()}
+        if "audiences" not in cols:
+            con.execute("ALTER TABLE clauses ADD COLUMN audiences TEXT")
+            for c in seed_data.CLAUSES:
+                con.execute(
+                    "UPDATE clauses SET audiences = ? WHERE id = ?",
+                    (",".join(c.get("audiences") or ["renter", "provider", "lawmaker"]), c["id"]),
+                )
         have = con.execute("SELECT COUNT(*) AS n FROM clauses").fetchone()["n"]
         if not have:
             _seed(con)
@@ -476,3 +486,42 @@ def add_position(person: str, provision: str, stance: str,
             (person.strip(), provision.strip(), stance, utc_now(),
              (source or "").strip() or None))
         return cur.lastrowid
+
+
+def calculate_braid(monthly_rent: float = 1300.0, units: int = 1,
+                    m1pr_eligible: bool = True) -> dict:
+    """Three-source funding braid & stress-test math (2026-10-23 audit)."""
+    rent = max(400.0, min(10000.0, float(monthly_rent)))
+    u = max(1, min(500000, int(units)))
+    float_mo = round((rent * 0.03) / 12.0, 2)
+    base_total_mo = round(rent * (15.33 / 1300.0), 2)
+    rem = max(0.0, base_total_mo - float_mo)
+    renter_mo = round(rem / 2.0, 2)
+    landlord_mo = round(base_total_mo - float_mo - renter_mo, 2)
+
+    fraud_mo = round(rent * (21.23 / 1300.0), 2)
+    recession_mo = round(rent * (30.00 / 1300.0), 2)
+    tenant_interest_yr = round(rent * 0.01, 2)
+    landlord_yr_total = round(landlord_mo * 12.0 * u, 2)
+    eviction_benchmark = 6500.0
+    unit_years_per_eviction = round(eviction_benchmark / max(1.0, landlord_mo * 12.0), 1)
+
+    return {
+        "monthly_rent": round(rent, 2),
+        "units": u,
+        "m1pr_eligible": bool(m1pr_eligible),
+        "deposit_float_mo": float_mo,
+        "renter_share_mo": renter_mo,
+        "landlord_match_mo": landlord_mo,
+        "total_pool_mo": base_total_mo,
+        "renter_out_of_pocket_mo": 0.0 if m1pr_eligible else renter_mo,
+        "tenant_1pct_interest_yr": tenant_interest_yr,
+        "landlord_annual_total": landlord_yr_total,
+        "total_pool_annual": round(base_total_mo * 12.0 * u, 2),
+        "eviction_cost_benchmark": eviction_benchmark,
+        "unit_years_per_eviction": unit_years_per_eviction,
+        "stress_base_mo": base_total_mo,
+        "stress_fraud_mo": fraud_mo,
+        "stress_recession_mo": recession_mo,
+    }
+

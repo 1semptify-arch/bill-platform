@@ -1,68 +1,154 @@
-/* Bill Platform client — smart-toolbar assist, mode detect, TV keys.
-   Progressive enhancement only: every action also works without JS. */
+/* Bill Platform Brain — UI/logic layer:
+   1. First-visit viewport mode suggestion (mobile vs desktop vs TV)
+   2. Multi-clause Selection Detection -> Context-Aware Smart Toolbar actions
+   3. Live 3-source Funding Braid & stress-test reactivity
+   4. TV / Presentation keyboard & remote navigation (←/→/Space/1-8/F/Esc) */
 (function () {
   "use strict";
 
-  /* 1. Mode auto-detect — only when the user has never picked one.
-     Narrow viewport suggests mobile; very wide suggests TV. */
+  /* 1. Mode auto-suggest on first visit when no explicit bp_mode cookie exists */
   try {
     if (!document.cookie.match(/(?:^|;\s*)bp_mode=/) &&
-        !window.__BP_MODE_GUESSED) {
+        !document.body.classList.contains("is-stage")) {
       var w = window.innerWidth;
-      var guess = w <= 700 ? "mobile" : (w >= 1700 ? "tv" : null);
+      var guess = w <= 720 ? "mobile" : (w >= 1820 ? "tv" : null);
       if (guess) {
         document.body.classList.remove("mode-desk");
         document.body.classList.add("mode-" + guess);
       }
     }
-  } catch (e) { /* never break the page */ }
+  } catch (e) {}
 
-  /* 2. Selection-aware toolbar — select bill text, get "Mark selection". */
-  var toolbar = document.querySelector(".toolbar");
-  var clauseEl = document.querySelector("[data-clause]");
-  if (toolbar && clauseEl) {
-    var selBtn = null;
+  /* 2. Multi-clause Selection Detection -> Context-Aware Smart Toolbar */
+  var selSlot = document.getElementById("tbSelection");
+  function clearSelectionUI() {
+    if (selSlot) {
+      selSlot.innerHTML = "";
+      selSlot.hidden = true;
+    }
+    document.querySelectorAll(".clause.sel, .clause-focus.sel").forEach(function (el) {
+      el.classList.remove("sel");
+    });
+  }
+
+  function findClauseContainer(node) {
+    if (!node) return null;
+    var el = node.nodeType === 1 ? node : node.parentElement;
+    return el && el.closest ? el.closest("[data-clause]") : null;
+  }
+
+  if (selSlot) {
     document.addEventListener("selectionchange", function () {
       var sel = window.getSelection();
       var txt = sel ? sel.toString().trim() : "";
-      if (txt.length > 3 && clauseEl.contains(sel.anchorNode)) {
-        var cid = clauseEl.getAttribute("data-clause");
-        if (!selBtn) {
-          selBtn = document.createElement("a");
-          selBtn.className = "tb-select";
-          toolbar.appendChild(selBtn);
-        }
-        selBtn.textContent = "Mark selection";
-        selBtn.href = "/mark?c=" + encodeURIComponent(cid) +
-                      "&q=" + encodeURIComponent(txt.slice(0, 300));
-        var host = clauseEl;
+      var host = sel && sel.anchorNode ? findClauseContainer(sel.anchorNode) : null;
+      if (txt.length > 3 && host) {
+        var cid = host.getAttribute("data-clause");
+        clearSelectionUI();
         host.classList.add("sel");
-      } else if (selBtn && !txt) {
-        selBtn.remove();
-        selBtn = null;
-        var marked = document.querySelector(".clause.sel");
-        if (marked) marked.classList.remove("sel");
+        var base = "/mark?c=" + encodeURIComponent(cid) +
+                   "&q=" + encodeURIComponent(txt.slice(0, 300));
+        selSlot.innerHTML =
+          '<a class="tb-select" href="' + base + '">Mark selection (' + cid + ')</a>' +
+          '<a class="tb-select" href="' + base + '&kind=edit">Propose edit (' + cid + ')</a>';
+        selSlot.hidden = false;
+      } else if (!txt) {
+        clearSelectionUI();
       }
     });
   }
 
-  /* 3. TV keyboard — ←/→ walk the clause neighbours; t = back to desk. */
-  if (document.body.classList.contains("mode-tv")) {
+  /* 3. Live 3-Source Funding Braid Calculator (works on /calculator and TV Slide 4) */
+  var rentRange = document.getElementById("rentRange");
+  var rentInput = document.getElementById("rentInput");
+  var unitsInput = document.getElementById("unitsInput");
+  var m1prInput = document.getElementById("m1prInput");
+
+  function fmtMoney(v) {
+    return "$" + Number(v).toFixed(2);
+  }
+
+  function recomputeBraid() {
+    if (!rentInput) return;
+    var rent = Math.max(400, Math.min(10000, parseFloat(rentInput.value) || 1300));
+    var units = unitsInput ? Math.max(1, Math.min(500000, parseInt(unitsInput.value, 10) || 1)) : 1;
+    var m1pr = m1prInput ? !!m1prInput.checked : true;
+
+    var floatMo = Math.round(((rent * 0.03) / 12) * 100) / 100;
+    var baseTotal = Math.round((rent * (15.33 / 1300)) * 100) / 100;
+    var rem = Math.max(0, baseTotal - floatMo);
+    var renterMo = Math.round((rem / 2) * 100) / 100;
+    var landlordMo = Math.round((baseTotal - floatMo - renterMo) * 100) / 100;
+    var fraudMo = Math.round((rent * (21.23 / 1300)) * 100) / 100;
+    var recMo = Math.round((rent * (30.0 / 1300)) * 100) / 100;
+    var tenantIntYr = Math.round((rent * 0.01) * 100) / 100;
+    var landlordYr = Math.round((landlordMo * 12 * units) * 100) / 100;
+    var unitYears = (6500 / Math.max(1, landlordMo * 12)).toFixed(1);
+
+    var setHtml = function (id, html) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    };
+    var isStage = document.body.classList.contains("is-stage");
+    setHtml("valFloat", fmtMoney(floatMo) + (isStage ? "/mo" : "<span>/unit/mo</span>"));
+    setHtml("valRenter", fmtMoney(renterMo) + (isStage ? "/mo" : "<span>/unit/mo</span>"));
+    setHtml("valLandlord", fmtMoney(landlordMo) + (isStage ? "/mo" : "<span>/unit/mo</span>"));
+    setHtml("valTotal", fmtMoney(baseTotal) + (isStage ? "/mo" : "<span>/unit/mo</span>"));
+    setHtml("valTenantInt", fmtMoney(tenantIntYr) + "/yr");
+    setHtml("valUnits", String(units));
+    setHtml("valLandlordYr", "$" + landlordYr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "/yr");
+    setHtml("valUnitYears", unitYears);
+    setHtml("stBase", fmtMoney(baseTotal) + " / mo");
+    setHtml("stFraud", fmtMoney(fraudMo) + " / mo");
+    setHtml("stRecession", fmtMoney(recMo) + " / mo");
+
+    var oopEl = document.getElementById("valOop");
+    if (oopEl) {
+      oopEl.textContent = m1pr
+        ? "$0.00 / mo new out-of-pocket (covered via monthly M1PR tax-credit advance)"
+        : fmtMoney(renterMo) + " / mo direct disclosed pool line (household above $77,570 M1PR cap)";
+    }
+  }
+
+  if (rentRange && rentInput) {
+    rentRange.addEventListener("input", function () {
+      rentInput.value = rentRange.value;
+      recomputeBraid();
+    });
+    rentInput.addEventListener("input", function () {
+      rentRange.value = rentInput.value;
+      recomputeBraid();
+    });
+  }
+  if (unitsInput) unitsInput.addEventListener("input", recomputeBraid);
+  if (m1prInput) m1prInput.addEventListener("change", recomputeBraid);
+
+  /* 4. TV / Presentation keyboard & remote D-pad controls */
+  if (document.body.classList.contains("mode-tv") || document.body.classList.contains("is-stage")) {
     document.addEventListener("keydown", function (e) {
-      var links = document.querySelectorAll(".pnav a");
-      if (e.key === "ArrowLeft" && links[0]) links[0].click();
-      if (e.key === "ArrowRight" && links[1]) links[1].click();
-      if (e.key === "t" || e.key === "T") {
-        window.location.href = "/mode/desk?next=" +
-          encodeURIComponent(location.pathname);
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      var prev = document.getElementById("prevSlide") || document.querySelector(".pnav a:first-child");
+      var next = document.getElementById("nextSlide") || document.querySelector(".pnav a:last-child");
+
+      if (e.key === "ArrowLeft" && prev) {
+        e.preventDefault();
+        prev.click();
+      } else if ((e.key === "ArrowRight" || e.key === " ") && next) {
+        e.preventDefault();
+        next.click();
+      } else if (e.key >= "1" && e.key <= "8" && document.body.classList.contains("is-stage")) {
+        window.location.href = "/present?s=" + e.key;
+      } else if (e.key === "f" || e.key === "F") {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(function () {});
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen().catch(function () {});
+        }
+      } else if (e.key === "Escape" || e.key === "t" || e.key === "T") {
+        window.location.href = "/mode/desk?next=/";
       }
     });
-  }
-
-  /* 4. Mark-form clause deep-link — /mark?c=… already preselects; this
-     keeps the pick visible in long lists. */
-  var sel = document.querySelector('select[name="clause_id"] option[selected]');
-  if (sel && sel.scrollIntoView) {
-    try { sel.scrollIntoView({ block: "nearest" }); } catch (e) {}
   }
 })();

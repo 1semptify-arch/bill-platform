@@ -1,72 +1,63 @@
 # Bill Platform — standalone minimalist micro-repo
 
-A self-contained local working platform for the **Minnesota Rent
-Assurance & Deposit Protection Act** (Turnbuchalla). One Python file
-serves the whole thing; SQLite holds the boards. No dependencies, no
-accounts, no network calls — loopback only.
+Self-contained local platform for presenting and working the **Minnesota
+Rent Assurance & Deposit Protection Act** (Turnbuchalla). Built in pure
+Python 3.11 standard library + SQLite (`data/platform.db`) with zero
+external runtime dependencies and zero coupling to the Semptify app's CSS
+or build gates.
 
 ```powershell
-python server.py          # → http://127.0.0.1:8093/
-python selfcheck.py       # → full route + write-path verification
+python server.py          # -> http://127.0.0.1:8093/
+python selfcheck.py       # -> end-to-end verification suite
 ```
 
 Port **8093** is registered in `C:\master-repo\PORTS.md`.
 
-## What it is
+## Surfaces & Working Mechanics
 
-| Surface | What it does |
+| Route | Purpose |
 |---|---|
-| `/` — Desk | Reading spine: objective → where it stands → next action → evidence; campaign pipeline (journey stages) and bill pillars. |
-| `/bill` | The whole draft, five titles, 23 clauses — statute text plus a plain-language line each. `+` opens a mark; `(n)` shows read-in marks per clause. |
-| `/clause/<id>` | Clause focus: text, plain language, audience notes (renter / provider / lawmaker), the claims it stands on, its margin, prev/next. |
-| `/mark` | The Inkwell — marks land in **intake**, never public by construction. Kinds: comment / question / proposed edit. |
-| `/intake` | Triage queue: read in (issues M-0001…, optional drafter answer published with it), hold, or crisis-route. |
-| `/margin` | The public ledger — read-in marks only, numbered and dated, answers cite by reference (`re: M-0001`). |
-| `/requests` | Requests desk — briefings/amendments/positions/questions through `new → reviewing → scheduled → incorporated` (or declined, on the record). |
-| `/positions` | Who stands where — person × provision × stance, dated. |
-| `/claims` | Claims ledger — every figure the campaign says out loud, verified or derivation shown. |
-| `/decisions` | Locked decisions — the eight design calls that hold the draft up. |
-| `/editions` | The change ledger (seeded E-01…E-09 from the canonical register). |
-| `/api/state` | JSON snapshot of every board (for tooling). |
+| `/` — Desk | Reading spine (`Objective` -> `Where it stands` -> `Next action`), 3 core mechanics summary, 6-step legislative pipeline, and evidence index. |
+| `/bill` | Full 23-clause statutory draft across Preamble + Titles I–IV, with **Audience Lenses** (`All`, `Renter`, `Provider`, `Lawmaker`), **Plain-English / Statute** view toggle, `+` clause marks, and `(n)` live margin counts. |
+| `/clause/<id>` | Focused clause view: statutory text, plain-language meaning, audience notes, linked claims/sources, prev/next neighbours, and clause margin. |
+| `/calculator` | Interactive **Three-Source Funding Braid & Stress-Test** (`Deposit Float` + `M1PR Advance` + `Landlord Match` vs. eviction cost, plus Base / `+30%` Fraud / `6%` Recession stress scenarios). |
+| `/present` (`/tv`) | Dedicated **8-slide 16:9 TV / Presentation Stage** for committee briefings, screenshares, and living-room TVs (`←`/`→`/`Space`, `1`–`8`, `F` fullscreen, `Esc` exit), including a live interactive funding slider on Slide 4 and live clause browser on Slide 7. |
+| `/mark` | The Inkwell — public submission form for comments, questions, and proposed clause edits (zero login; lands in dark intake). |
+| `/margin` | Public docket ledger — numbered (`M-0001`…), dated marks read into the record, with official Drafting Table answers and citation replies (`re: M-0001`). |
+| `/intake` | **Steward-gated** triage queue: `Read in` (assigns M-number + optional public answer), `Hold`, or `Crisis route` (keeps personal emergencies off the public board; HOME Line `612-728-5767` displayed on form). |
+| `/requests` | Working Requests Desk (`briefing`, `amendment`, `position`, `question`) tracked through `new -> reviewing -> scheduled -> incorporated | declined`. |
+| `/positions` | Public ledger of organizational and office stances (`person x provision x stance`, dated). |
+| `/claims` | Verification ledger (`C-01`…`C-12`) separating `verified` statutory/agency figures from `estimate` derivations awaiting actuarial review. |
+| `/decisions` | The 8 locked non-negotiable safeguards (`No subrogation`, `Independent adjudication`, `Symmetric fraud penalties`, `5-year sunset`, etc.). |
+| `/editions` | Dated change history (`E-01` through `E-09`). |
 
-## Three screen modes
+## Three Distinct Screen Modes
 
-`?mode` links in the top bar switch and persist via cookie:
+Switchable at any time in the top bar (persisted via `bp_mode` cookie) and
+auto-suggested on first visit by viewport width:
 
-- **Desk** — default working density.
-- **TV** — presentation scale (~26px base), `←`/`→` walk clause
-  neighbours on a clause page, `T` returns to desk.
-- **Mobile** — stacked single column, large touch targets.
+1. **Desktop (`mode-desk`)** — 2-column minimalist workspace with a sticky
+   left architectural index rail (`220px`), sticky Context-Aware Smart
+   Toolbar, and crisp editorial reading spine (`18px` base).
+2. **TV / Presentation (`mode-tv` + `/present`)** — Full-bleed widescreen
+   16:9 briefing stage (`23px`–`44px` room-legible scale, side rail hidden,
+   keyboard/remote D-pad navigation).
+3. **Mobile / Tablet (`mode-mobile`)** — Fixed thumb-zone 5-tab bottom
+   navigation bar (`Desk`, `Bill`, `Braid`, `Margin`, `Requests`), single-column
+   touch targets, and centered `480px` device preview when toggled on desktop.
 
-The client also *suggests* a mode on first visit (narrow → mobile, very
-wide → TV) until you pick one yourself.
+## Context-Aware Smart Toolbar & Steward Gate
 
-## Context-aware smart toolbar
-
-The bar under the brand changes with what you're looking at: the bill
-offers *Mark the draft / The margin / Claims / Present*; a clause offers
-*Mark \<id\> / Request on \<id\>* plus its margin and the draft; the
-margin and intake offer each other's counts; the requests desk and
-positions offer their add-forms. Selecting bill text in the browser adds
-a **Mark selection** action that prefills clause + quote.
-
-## The board model (SQLite)
-
-Marks follow the docket model from
-`COMMUNITY_BOARD_DESIGN_2026-11-06.md`: intake is **dark** — a person
-reads each mark in, which is when it gets its public number; an answer
-typed at read-in enters the record beside the mark ("Drafting Table").
-Held stays dark; crisis-routed stays dark and is counted. Contact info
-is stored intake-only and never rendered.
-
-## Canon
-
-`seed_data.py` is the curated campaign seed — bill meta, journey
-stages, five titles, 23 clauses (statute text + plain language +
-audience notes + claim refs), claims ledger, locked decisions, seed
-marks and requests. `seed/clauses.json` is the extraction snapshot from
-the marker-locked BILLDOC block of the canonical read-through at
-`modules/app-semptify-fastapi/app/static/turnbuchalla/index.html`
-(regenerate with `python seed/extract_clauses.py`). Editions seed comes
-from the case-side `registers/editions.jsonl`. Canon stays upstream —
-this platform is a working surface, not a second source of truth.
+- **Route-aware tools**: The sticky toolbar swaps its primary and secondary
+  controls for each surface (Audience Lenses & view toggles on `/bill`,
+  rent presets on `/calculator`, slide dots on `/present`, triage tools on
+  `/intake`).
+- **Selection detection**: Highlighting text inside *any* clause (`P-1`…`IV-5`)
+  on `/bill` or `/clause/<id>` dynamically surfaces **`Mark selection (<ID>)`**
+  and **`Propose edit (<ID>)`** in the Smart Toolbar, pre-filling the exact
+  clause and quoted passage.
+- **Steward toggle + passcode**: Public readers browse, calculate, post marks,
+  and submit requests with zero login. Unlocking **Steward mode** (`1-tap`
+  on loopback `127.0.0.1` in local dev, or gated by `BILL_STEWARD_CODE` via
+  `/steward` when deployed) enables intake read-in, official answers, and
+  request status transitions.
