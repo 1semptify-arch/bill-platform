@@ -1,0 +1,14 @@
+{
+  "note": "Seed of the editions ledger — copied 2026-11-14 from the canonical registers/editions.jsonl in the case-side bill folder (06_The_Bill_Turnbucapp). The canon remains there; new editions are entered here as platform rows.",
+  "editions": [
+    {"edition": "E-01", "date": "2026-10-14", "clause": "all", "change": "First full structure locked — the design calls that became the draft's spine: landlord-paid, experience-rated premium; no subrogation; independent claims adjudication with a tenant counter-claim lane; tenant and consumer seats on the governing board; manufactured-claim penalties; sunset with a year-3 report."},
+    {"edition": "E-02", "date": "2026-10-16", "clause": "—", "change": "Naming locked: the model is Turnbuchalla; the statute is the Minnesota Rent Assurance & Deposit Protection Act; presented by Semptify."},
+    {"edition": "E-03", "date": "2026-10-18", "clause": "Titles I–III", "change": "Funding model resolved — the deposit goes into bonded program escrow at signing and the landlord never holds it; year one carried by escrow float, the ongoing share by the MN Renter's Credit. Third coverage leg added: renter's personal-belongings coverage rides the same pool."},
+    {"edition": "E-04", "date": "2026-10-19", "clause": "Titles II–III", "change": "Funding braid merged to three sources — escrow float, Renter's Credit assignment, and an explicit landlord matched share. Fairness axiom locked: nobody gets hurt — landlord-side and tenant-side abuse controls must be equally real. Belongings coverage shape deferred to post-actuarial."},
+    {"edition": "E-05", "date": "2026-10-23", "clause": "I-1, I-5, Title II", "change": "Hole-audit remediation: deposit stays in custodial escrow for the tenancy (UK custodial model) with an annual float dividend replacing the clean-year refund; rating resolved as community-rated base plus bounded experience surcharge; landlord no-claim dividend added. Float math corrected to 3% net of escrowed deposits."},
+    {"edition": "E-06", "date": "2026-10-23", "clause": "—", "change": "Model renamed Turnbucapp to Turnbuchalla; the old spelling kept only as an internal alias."},
+    {"edition": "E-07", "date": "2026-10-24", "clause": "all", "change": "Titled restructure — the draft reorganized into Titles I through IV (deposit protection, rent assurance, belongings, governance). This became the public read-through text."},
+    {"edition": "E-08", "date": "2026-11-02", "clause": "all", "change": "One live bill — versions abolished; BILL_LIVE.md is the only draft and the public read-through is generated from it. First public parchment published: the bill, the Inkwell, the Public Record, References, Supporters."},
+    {"edition": "E-09", "date": "2026-11-05", "clause": "Title I", "change": "Title I rendered as a formal amendatory act against Minn. Stat. § 504B.178 — statutory language prepared for outside-counsel redline."}
+  ]
+}
