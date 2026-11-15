@@ -154,6 +154,7 @@ def page(title: str, body: str, ctx: dict,
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)} — {BRAND}</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
 <link rel="stylesheet" href="/static/platform.css">
 </head>
 <body class="mode-{esc(mode)}{stage_cls}" data-steward="{'1' if ctx['steward'] else '0'}">
