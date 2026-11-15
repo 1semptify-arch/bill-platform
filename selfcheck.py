@@ -194,6 +194,13 @@ def main() -> int:
         check("Mobile mode renders thumb-zone bottom bar", st == 200
               and "mode-mobile" in m_html and 'class="mobile-bar"' in m_html)
 
+        st, a_html, _ = get("/bill")  # no cookie -> auto default
+        check("Auto mode default: body flagged for JS viewport follow",
+              st == 200 and 'data-mode-auto="1"' in a_html)
+        st, hdrs = get_raw("/mode/auto?next=/bill")
+        check("/mode/auto sets bp_mode=auto", st == 303
+              and "bp_mode=auto" in (hdrs.get("Set-Cookie") or ""))
+
         # ---- 4. Steward Gate + Dark Intake -> Read-In -> Public Margin -
         st, html, _ = get("/margin")
         check("seed margin has M-0001..M-0004", "M-0001" in html and "M-0004" in html)

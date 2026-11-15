@@ -143,8 +143,8 @@ class Handler(BaseHTTPRequestHandler):
         return out
 
     def _mode(self) -> str:
-        m = self._cookies().get("bp_mode", "desk")
-        return m if m in MODES else "desk"
+        m = self._cookies().get("bp_mode", "auto")
+        return m if m in MODES + ("auto",) else "auto"
 
     def _is_steward(self) -> bool:
         tok = self._cookies().get("bp_steward", "")
@@ -243,7 +243,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path.startswith("/mode/"):
             m = path.split("/", 2)[2]
-            if m in MODES:
+            if m in MODES + ("auto",):
                 default_dest = "/present?s=1" if m == "tv" else "/"
                 raw_next = q.get("next", [default_dest])[0]
                 nxt = _safe_next(raw_next, default_dest)

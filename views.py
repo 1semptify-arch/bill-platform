@@ -47,6 +47,7 @@ def esc(v) -> str:
 def _mode_links(current: str, path: str) -> str:
     out = []
     specs = (
+        ("auto", "Auto"),
         ("desk", "Desktop"),
         ("tv", "TV / Present"),
         ("mobile", "Mobile / Tablet"),
@@ -157,7 +158,7 @@ def page(title: str, body: str, ctx: dict,
 <link rel="icon" type="image/png" href="/static/favicon.png">
 <link rel="stylesheet" href="/static/platform.css">
 </head>
-<body class="mode-{esc(mode)}{stage_cls}" data-steward="{'1' if ctx['steward'] else '0'}">
+<body class="mode-{'desk' if mode == 'auto' else esc(mode)}{stage_cls}"{' data-mode-auto="1"' if mode == 'auto' else ''} data-steward="{'1' if ctx['steward'] else '0'}">
 <div class="viewport-shell">
 <header class="topbar">
   <a class="brand" href="/"><img class="brand-logo" src="/static/logo.svg" alt=""><span>{BRAND}<small>{esc(SUB)}</small></span></a>

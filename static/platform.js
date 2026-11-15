@@ -6,16 +6,25 @@
 (function () {
   "use strict";
 
-  /* 1. Mode auto-suggest on first visit when no explicit bp_mode cookie exists */
+  /* 1. Auto screen mode — follows the viewport live while bp_mode=auto
+     (default). Picking Desktop / TV / Mobile pins that mode; "Auto"
+     returns control to the viewport. */
   try {
-    if (!document.cookie.match(/(?:^|;\s*)bp_mode=/) &&
-        !document.body.classList.contains("is-stage")) {
-      var w = window.innerWidth;
-      var guess = w <= 720 ? "mobile" : (w >= 1820 ? "tv" : null);
-      if (guess) {
-        document.body.classList.remove("mode-desk");
-        document.body.classList.add("mode-" + guess);
-      }
+    var mqMobile = window.matchMedia("(max-width: 720px)");
+    var mqTV = window.matchMedia("(min-width: 1820px)");
+    function applyAutoMode() {
+      var b = document.body;
+      if (!b.hasAttribute("data-mode-auto") || b.classList.contains("is-stage")) return;
+      var m = mqMobile.matches ? "mobile" : (mqTV.matches ? "tv" : "desk");
+      b.classList.remove("mode-desk", "mode-tv", "mode-mobile");
+      b.classList.add("mode-" + m);
+    }
+    applyAutoMode();
+    if (mqMobile.addEventListener) {
+      mqMobile.addEventListener("change", applyAutoMode);
+      mqTV.addEventListener("change", applyAutoMode);
+    } else {
+      window.addEventListener("resize", applyAutoMode);
     }
   } catch (e) {}
 
