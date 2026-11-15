@@ -159,7 +159,7 @@ def page(title: str, body: str, ctx: dict,
 <body class="mode-{esc(mode)}{stage_cls}" data-steward="{'1' if ctx['steward'] else '0'}">
 <div class="viewport-shell">
 <header class="topbar">
-  <a class="brand" href="/">{BRAND}<small>{esc(SUB)}</small></a>
+  <a class="brand" href="/"><img class="brand-logo" src="/static/logo.svg" alt=""><span>{BRAND}<small>{esc(SUB)}</small></span></a>
   <div class="topbar-right">
     <div class="modes" role="group" aria-label="Screen mode">{_mode_links(mode, path)}</div>
     {_steward_control(ctx)}
@@ -173,7 +173,7 @@ def page(title: str, body: str, ctx: dict,
   </main>
 </div>
 <footer class="foot">
-  <p class="foot-brand"><b>Presented by <a href="https://semptify.org">Semptify</a></b>
+  <p class="foot-brand"><img class="foot-logo" src="/static/logo.svg" alt=""><b>Presented by <a href="https://semptify.org">Semptify</a></b>
   — housing rights, written in public. A Minnesota nonprofit project.</p>
   <p>Working draft — nothing here is filed law. Marks land in intake and
   are read into the ledger by a person, never automatically.</p>

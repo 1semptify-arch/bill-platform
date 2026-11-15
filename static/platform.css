@@ -49,9 +49,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   background: var(--card);
 }
 .brand {
+  display: inline-flex; align-items: center; gap: 10px;
   font-family: var(--serif); font-weight: 700; font-size: 1.25rem;
   color: var(--ink); letter-spacing: -0.02em; line-height: 1.15;
 }
+.brand-logo { height: 34px; width: auto; }
+.foot-logo { height: 20px; width: auto; vertical-align: -4px; margin-right: 8px; }
 .brand:hover { text-decoration: none; }
 .brand small {
   display: block; font-family: var(--sans); font-weight: 400;
