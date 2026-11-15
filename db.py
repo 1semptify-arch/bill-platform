@@ -30,7 +30,9 @@ from pathlib import Path
 import seed_data
 
 HERE = Path(__file__).resolve().parent
-DB_PATH = HERE / "data" / "platform.db"
+import os
+
+DB_PATH = Path(os.environ.get("PLATFORM_DB", str(HERE / "data" / "platform.db")))
 SEED_DIR = HERE / "seed"
 
 MARK_STATUSES = ("queued", "read_in", "held", "crisis_routed")

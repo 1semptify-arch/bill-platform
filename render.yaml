@@ -1,0 +1,19 @@
+# Render blueprint — deploys the Bill Platform as a web service with a
+# persistent disk for the SQLite database (the public ledger survives
+# redeploys). Create: Render Dashboard → New → Blueprint → point at this repo.
+services:
+  - type: web
+    name: bill-platform
+    runtime: python
+    plan: starter
+    buildCommand: ""
+    startCommand: python server.py --host 0.0.0.0
+    envVars:
+      - key: BILL_STEWARD_CODE
+        sync: false           # set this in the dashboard — REQUIRED in prod
+      - key: PLATFORM_DB
+        value: /var/data/platform.db
+    disk:
+      name: bill-platform-data
+      mountPath: /var/data
+      sizeGB: 1
