@@ -483,3 +483,7 @@ a.next { font-weight: 700; color: var(--link); }
   padding: 10px 24px; background: var(--card); border-top: 1px solid var(--line);
   font-size: 0.95rem; color: var(--mut); }
 .is-stage .speaker-notes + .stage-foot { margin-bottom: 56px; }
+.st-target { color: var(--mut); border-color: var(--mut); }
+.st-contacted { color: var(--amber, #8a6d1f); border-color: var(--amber, #8a6d1f); }
+.st-talks { color: var(--amber, #8a6d1f); border-color: var(--amber, #8a6d1f); }
+.st-endorsed { color: var(--green, #2f6b3a); border-color: var(--green, #2f6b3a); }

@@ -33,6 +33,8 @@ STATUS_WORDS = {
     "done": "done", "current": "current", "next": "next",
     "upcoming": "upcoming", "locked": "locked", "modeled": "modeled",
     "open": "open drafting",
+    "target": "target", "contacted": "contacted", "talks": "in talks",
+    "endorsed": "endorsed", "retracted": "retracted", "proposed": "proposed",
 }
 REQ_NEXT = {"new": "reviewing", "reviewing": "scheduled",
             "scheduled": "incorporated"}
@@ -95,6 +97,7 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
         ("/search", "Search"),
         ("/teach", "Teach"),
         ("/track", "Track"),
+        ("/campaign", "Campaign"),
         ("/positions", "Positions"),
         ("/claims", "Claims Ledger"),
         ("/decisions", "Locked Decisions"),
@@ -196,7 +199,7 @@ def page(title: str, body: str, ctx: dict,
   <a href="/claims">Claims</a> · <a href="/decisions">Decisions</a> ·
   <a href="/editions">Editions</a> · <a href="/changes">Changes</a> ·
   <a href="/search">Search</a> · <a href="/teach">Teach</a> ·
-  <a href="/track">Track</a> · <a href="/tv">TV Present</a> ·
+  <a href="/track">Track</a> · <a href="/campaign">Campaign</a> · <a href="/tv">TV Present</a> ·
   <a href="https://semptify.org">semptify.org</a></p>
 </footer>
 {_mobile_bottom_nav(ctx)}
@@ -644,8 +647,14 @@ def clause_view(cid: str, ctx: dict) -> bytes | None:
   {_mark_form(cid, None)}
 </section>"""
 
+    leg_mail = ("mailto:?subject=" + urllib.parse.quote(
+        f"MN Rent Assurance & Deposit Protection Act — {c['id']} {c['heading']}")
+        + "&body=" + urllib.parse.quote(
+        f"Please read {c['id']} ({c['heading']}) of the working draft.\n\n"
+        f"{c['plain_text']}\n\nI'm asking you to carry this bill in 2027."))
     actions = [
         (f"Mark {cid}", f"/mark?c={cid}", "primary"),
+        ("Send to a legislator", leg_mail, "link"),
         (f"Propose edit on {cid}", f"/mark?c={cid}&kind=edit", "link"),
         (f"Request on {cid}", f"/requests?c={cid}#new", "link"),
     ]
@@ -1498,6 +1507,156 @@ first, each with a discussion prompt. Pair with the
         ("Calculator", "/calculator", "link"),
         ("The margin", "/margin", "link"),
     ], "Teacher / student tools")
+
+
+def _supporter_row(s, steward: bool) -> str:
+    org = f'<span class="quiet">{esc(s["org"] or "")}</span>' if s["org"] else ""
+    dist = f' · {esc(s["district"])}' if s["district"] else ""
+    note = f'<p class="quiet">{esc(s["note"])}</p>' if s["note"] else ""
+    move = ""
+    if steward:
+        nxt = {"target": "contacted", "contacted": "talks",
+               "talks": "endorsed", "endorsed": "endorsed"}[s["stage"]]
+        move = (f'<form method="post" action="/api/supporter" class="stack mact">'
+                f'<input type="hidden" name="id" value="{s["id"]}">'
+                f'<input name="note" placeholder="Note (optional)" maxlength="300">'
+                f'<button name="stage" value="{nxt}" class="ghost">Move to {nxt}</button></form>'
+                if s["stage"] != "endorsed" else "")
+    return (f'<article class="mark"><p class="mno"><b>{esc(s["name"])}</b> '
+            f'{_status(s["stage"])}{dist}</p>'
+            f'<p>{esc(s["role"] or "")} {org}</p>{note}{move}</article>')
+
+
+def campaign(ctx: dict) -> bytes:
+    steps = db.journey()
+    lane = "".join(
+        f'<li><b>{esc(s["name"])}</b> {_status(s["state"])}'
+        + (f' <span class="quiet">— {esc(s["note"])}</span>' if s["note"] else "")
+        + "</li>" for s in steps)
+    counts = db.supporter_counts()
+    sup = db.supporters()
+    groups = {}
+    for s in sup:
+        groups.setdefault(s["stage"], []).append(s)
+    allies = ""
+    for st, label in (("endorsed", "Endorsed"), ("talks", "In talks"),
+                      ("contacted", "Contacted"), ("target", "Targets")):
+        rows = groups.get(st, [])
+        if rows:
+            allies += (f'<h2>{label} ({len(rows)})</h2>'
+                       + "".join(_supporter_row(s, ctx["steward"]) for s in rows))
+    add_form = ""
+    if ctx["steward"]:
+        add_form = """
+<details class="stack"><summary><b>Add an ally</b> (steward)</summary>
+<form method="post" action="/api/supporter" class="stack">
+  <div class="row"><input name="name" required placeholder="Name">
+    <input name="org" placeholder="Organization"></div>
+  <div class="row"><input name="role" placeholder="Role">
+    <input name="district" placeholder="District / scope"></div>
+  <div class="row"><select name="stage"><option value="target">target</option>
+    <option value="contacted">contacted</option><option value="talks">talks</option>
+    <option value="endorsed">endorsed</option></select>
+    <input name="note" placeholder="Note"></div>
+  <div class="row"><button>Add</button></div>
+</form></details>"""
+    mailto = ("mailto:?subject=" + urllib.parse.quote("MN Rent Assurance & Deposit Protection Act — read the working draft")
+              + "&body=" + urllib.parse.quote(
+                  "The working draft of the Minnesota Rent Assurance & Deposit "
+                  "Protection Act — deposits in bonded custody, neutral "
+                  "adjudication, hardship rent assurance, no subrogation.\n\n"
+                  "Worth 20 minutes. I'm asking you to carry it in the 2027 "
+                  "session."))
+    body = f"""
+<header class="mast"><h1>Carry the bill — 2027</h1>
+<p class="lede">The campaign: get this draft actuarially verified, sponsored,
+heard, and passed in the 2027 Minnesota session. <b>{counts.get("endorsed", 0)}</b>
+endorsed · {counts.get("talks", 0)} in talks · {counts.get("contacted", 0)} contacted
+· {counts.get("target", 0)} targets on the list.</p></header>
+
+<section><h2>Where it stands</h2><ul class="how-steps">{lane}</ul></section>
+
+<section><h2>The 2027 plan</h2>
+<ol class="how-steps">
+  <li><b>Verify the math.</b> Every <a href="/claims">estimate</a> needs
+  actuarial sign-off — the credibility gate everything else compounds on.</li>
+  <li><b>Build the coalition.</b> The targets below become contacted, then
+  talks, then endorsed — tracked in the open.</li>
+  <li><b>Collect testimony.</b> Marks on the <a href="/margin">Margin</a>
+  become the <a href="/packet">testimony packet</a> committees actually read.</li>
+  <li><b>File in January.</b> Revisor draft, chief authors in both chambers,
+  housing committee hearings.</li>
+  <li><b>Fallback is built in.</b> Title IV-1 already allows an MHFA pilot on
+  LIHTC properties — fund the pilot if the full bill stalls.</li>
+</ol></section>
+
+<section><h2>Do one thing</h2>
+<ul class="ev">
+  <li><a href="/mark"><b>Mark the draft</b></a> — your name never publishes
+  without read-in; your words can reach a hearing.</li>
+  <li><a href="/requests"><b>Request a briefing or take a position</b></a> —
+  orgs get worked through the requests desk.</li>
+  <li><a href="{mailto}"><b>Send the draft to your legislator</b></a> —
+  opens your mail with the ask pre-written.</li>
+  <li><a href="/teach"><b>Teach it</b></a> — 14-stop guided path for
+  meetings and classrooms.</li>
+  <li><a href="/packet"><b>Print the testimony packet</b></a> — every
+  read-in mark, grouped by clause.</li>
+</ul></section>
+
+<section><h2>The allies ledger</h2>
+{add_form}
+{allies or '<p class="quiet">The ledger is being built.</p>'}
+</section>"""
+    return page("Campaign", body, ctx, [
+        ("Send to a legislator", mailto, "primary"),
+        ("Mark the draft", "/mark", "link"),
+        ("Testimony packet", "/packet", "link"),
+        ("Teach it", "/teach", "link"),
+    ], "Campaign tools")
+
+
+def packet(ctx: dict) -> bytes:
+    """Printable testimony packet — read-in marks grouped by clause."""
+    rows = db.marks(status="read_in")
+    n_ret = sum(1 for r in rows if r["retracted_at"])
+    live = [r for r in rows if not r["retracted_at"]]
+    by_clause: dict[str, list] = {}
+    for m in live:
+        by_clause.setdefault(m["clause_id"] or "general", []).append(m)
+    blocks = []
+    for c in db.clauses():
+        marks = by_clause.pop(c["id"], [])
+        if not marks:
+            continue
+        entries = "".join(
+            f'<article class="mark"><p class="mno"><b>{esc(m["public_no"])}</b> · '
+            f'{esc(m["read_in_at"] or m["created_at"])} · '
+            f'{KIND_WORDS.get(m["kind"], "comment")}</p>'
+            f'<p>{esc(m["body"])}</p>'
+            + (f'<p class="response"><b>{esc(m["responder_role"] or "Drafting Table")}:</b> '
+               f'{esc(m["response_body"])}</p>' if m["response_body"] else "")
+            + "</article>" for m in marks)
+        blocks.append(f'<h2 class="title-head">{esc(c["id"])} — {esc(c["heading"])}'
+                      f' <span class="quiet">({len(marks)})</span></h2>{entries}')
+    general = by_clause.pop("general", [])
+    if general:
+        entries = "".join(
+            f'<article class="mark"><p class="mno"><b>{esc(m["public_no"])}</b> · '
+            f'{esc(m["read_in_at"] or m["created_at"])}</p><p>{esc(m["body"])}</p></article>'
+            for m in general)
+        blocks.append(f'<h2 class="title-head">General marks ({len(general)})</h2>{entries}')
+    body = f"""
+<header class="mast"><h1>Testimony packet</h1>
+<p class="lede">{len(live)} read-in marks grouped by clause
+{f' · {n_ret} retracted (kept on record)' if n_ret else ""}.
+Print or save as PDF — this is what goes in a committee folder.</p></header>
+{"".join(blocks) or '<p class="quiet">No marks read in yet.</p>'}"""
+    return page("Testimony Packet", body, ctx, [
+        ("Mark the draft", "/mark", "primary"),
+        ("The margin", "/margin", "link"),
+        ("Campaign", "/campaign", "link"),
+    ], "Testimony packet")
 
 
 def not_found(ctx: dict) -> bytes:

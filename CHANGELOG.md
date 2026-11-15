@@ -72,3 +72,13 @@ limit on public posts, og/description meta, print stylesheet, skip-link,
 steward /api/export backup, speaker notes on the TV deck (?notes=1),
 and /teach — a 14-stop guided path through the bill with plain language
 and discussion prompts for classrooms and tenant meetings.
+
+### Next — The campaign: /campaign + /packet + legislator mailto
+Campaign hub for carrying the bill to 2027: journey lane, the 5-step
+plan, one-thing actions (mark / request / mail-to-legislator / teach /
+print packet), and the allies ledger — supporters tracked through
+target → contacted → talks → endorsed, steward-managed. Seeded with
+Amy Klobuchar (endorsed) plus 14 coalition targets (HOME Line, HJC, IX,
+CTUL, legal aid, faith orgs, MHA, MHFA, SFM, Eviction Lab). /packet is
+the printable testimony packet — read-in marks grouped by clause. Clause
+pages gained a "Send to a legislator" mailto action.

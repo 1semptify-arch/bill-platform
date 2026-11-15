@@ -137,6 +137,17 @@ CREATE TABLE IF NOT EXISTS positions (
     noted_at  TEXT NOT NULL,
     source    TEXT
 );
+CREATE TABLE IF NOT EXISTS supporters (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    name      TEXT NOT NULL,
+    org       TEXT,
+    role      TEXT,
+    stage     TEXT NOT NULL DEFAULT 'target'
+              CHECK (stage IN ('target','contacted','talks','endorsed')),
+    district  TEXT,
+    note      TEXT,
+    noted_at  TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS changes (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     public_no     TEXT UNIQUE,            -- CH-0001
@@ -289,6 +300,53 @@ def init(path: Path | None = None) -> None:
         have = con.execute("SELECT COUNT(*) AS n FROM clauses").fetchone()["n"]
         if not have:
             _seed(con)
+        _seed_supporters(con)
+
+
+def _seed_supporters(con) -> None:
+    if con.execute("SELECT COUNT(*) AS n FROM supporters").fetchone()["n"]:
+        return
+    con.executemany(
+        "INSERT INTO supporters (name, org, role, stage, district, note,"
+        " noted_at) VALUES (?,?,?,?,?,?,?)",
+        [
+            ("Amy Klobuchar", "U.S. Senate (MN)", "U.S. Senator",
+             "endorsed", "MN statewide",
+             "Named supporter — federal visibility ally; the bill itself is state-level.",
+             utc_now()),
+            ("HOME Line", "HOME Line", "Tenant hotline & advocacy",
+             "target", "Statewide", "Already the platform's crisis-routing partner.", utc_now()),
+            ("Housing Justice Center", "Housing Justice Center", "Policy & litigation",
+             "target", "Statewide", "Deposit-protection policy expertise.", utc_now()),
+            ("Inquilinxs Unidxs", "Inquilinxs Unidxs (IX)", "Renter organizing",
+             "target", "Minneapolis", None, utc_now()),
+            ("CTUL", "CTUL", "Worker center",
+             "target", "Twin Cities", None, utc_now()),
+            ("Legal Services Advocacy Project", "LSAP / Mid-MN Legal Aid",
+             "Legal aid", "target", "Statewide",
+             "Sees deposit disputes daily.", utc_now()),
+            ("SMRLS", "Southern MN Regional Legal Services", "Legal aid",
+             "target", "Southern MN", None, utc_now()),
+            ("ISAIAH / Faith in Minnesota", "ISAIAH", "Faith organizing",
+             "target", "Metro + St. Cloud", None, utc_now()),
+            ("Jewish Community Action", "JCA", "Faith organizing",
+             "target", "Metro", None, utc_now()),
+            ("MN Coalition for the Homeless", "MCH", "Anti-poverty coalition",
+             "target", "Statewide", None, utc_now()),
+            ("SEIU Minnesota", "SEIU", "Labor", "target", "Statewide", None, utc_now()),
+            ("Minnesota Multi Housing Assoc.", "MHA", "Provider association",
+             "target", "Statewide",
+             "Persuasion target — bill pays providers during hardship and ends surety-fee competition.", utc_now()),
+            ("MHFA", "MN Housing Finance Agency", "Pilot home agency",
+             "target", "Statewide",
+             "Named in Title IV-1 as the pilot administrator.", utc_now()),
+            ("SFM Mutual", "SFM Mutual Insurance", "Mutual precedent",
+             "target", "Bloomington",
+             "Mutual-dividend model precedent for the claims-free dividend.", utc_now()),
+            ("Eviction Lab", "Eviction Lab (Princeton)", "Research",
+             "target", "National",
+             "Serial-filing data already cited in the claims ledger.", utc_now()),
+        ])
 
 
 # ---------- reads ----------
@@ -402,6 +460,52 @@ def open_request_count() -> int:
         return con.execute(
             "SELECT COUNT(*) AS n FROM requests WHERE status IN"
             " ('new','reviewing','scheduled')").fetchone()["n"]
+
+
+def supporters(stage: str | None = None) -> list[sqlite3.Row]:
+    q, args = "SELECT * FROM supporters WHERE 1=1", []
+    if stage:
+        q += " AND stage = ?"; args.append(stage)
+    q += (" ORDER BY CASE stage WHEN 'endorsed' THEN 0 WHEN 'talks' THEN 1"
+          " WHEN 'contacted' THEN 2 ELSE 3 END, org, name")
+    with connect() as con:
+        return con.execute(q, args).fetchall()
+
+
+def supporter_counts() -> dict[str, int]:
+    with connect() as con:
+        return {r["stage"]: r["n"] for r in con.execute(
+            "SELECT stage, COUNT(*) AS n FROM supporters GROUP BY stage")}
+
+
+def add_supporter(name: str, org: str | None, role: str | None,
+                  stage: str, district: str | None,
+                  note: str | None) -> None:
+    if stage not in ("target", "contacted", "talks", "endorsed"):
+        stage = "target"
+    with connect() as con:
+        con.execute(
+            "INSERT INTO supporters (name, org, role, stage, district, note,"
+            " noted_at) VALUES (?,?,?,?,?,?,?)",
+            (name.strip(), (org or "").strip() or None,
+             (role or "").strip() or None, stage,
+             (district or "").strip() or None,
+             (note or "").strip() or None, utc_now()))
+
+
+def supporter_stage(supporter_id: int, stage: str,
+                    note: str | None = None) -> bool:
+    if stage not in ("target", "contacted", "talks", "endorsed"):
+        return False
+    with connect() as con:
+        n = (note or "").strip() or None
+        cur = con.execute(
+            "UPDATE supporters SET stage = ?,"
+            " note = CASE WHEN ? IS NULL THEN note"
+            "           ELSE COALESCE(note,'') || ' ' || ? END"
+            " WHERE id = ?",
+            (stage, n, n, supporter_id))
+        return cur.rowcount > 0
 
 
 def positions() -> list[sqlite3.Row]:

@@ -373,6 +373,8 @@ class Handler(BaseHTTPRequestHandler):
             "/track": lambda: views.track_page(q.get("code", [""])[0],
                                                q.get("new", [""])[0], ctx),
             "/teach": lambda: views.teach_page(ctx),
+            "/campaign": lambda: views.campaign(ctx),
+            "/packet": lambda: views.packet(ctx),
             "/mark": lambda: views.mark_form_page(
                 clause_id, q.get("re", [None])[0],
                 q.get("q", [None])[0], q.get("kind", [None])[0], ctx),
@@ -517,6 +519,28 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 pass
             self._redirect("/changes")
+            return
+
+        if path == "/api/supporter":
+            if not self._is_steward():
+                self._send(b"steward unlock required for the allies ledger",
+                           403, "text/plain; charset=utf-8")
+                return
+            if self._one(form, "id"):
+                try:
+                    db.supporter_stage(int(self._one(form, "id", 20)),
+                                       self._one(form, "stage", 20),
+                                       self._one(form, "note", 500) or None)
+                except ValueError:
+                    pass
+            else:
+                db.add_supporter(self._one(form, "name", 200),
+                                 self._one(form, "org", 200),
+                                 self._one(form, "role", 200),
+                                 self._one(form, "stage", 20),
+                                 self._one(form, "district", 120),
+                                 self._one(form, "note", 500))
+            self._redirect("/campaign")
             return
 
         if path == "/api/position":

@@ -413,6 +413,28 @@ def main() -> int:
         st, hdrs = get_raw("/api/export", cookie=steward_cookie)
         check("/api/export serves full backup to steward", st == 200)
 
+        # ---- 7. Campaign: allies ledger + testimony packet + mailto ----
+        st, html, _ = get("/campaign")
+        check("campaign hub renders journey + allies", st == 200
+              and "Carry the bill" in html and "Amy Klobuchar" in html
+              and "endorsed" in html and "mailto:" in html)
+        st, _ = post("/api/supporter", {"name": "X", "stage": "endorsed"})
+        check("unauthenticated POST /api/supporter -> 403", st == 403)
+        st, _ = post("/api/supporter", {
+            "name": "Test Ally", "org": "Test Org", "stage": "contacted"},
+            cookie=steward_cookie)
+        st, html, _ = get("/campaign")
+        check("steward adds ally to ledger", "Test Ally" in html)
+        st, _ = post("/api/supporter", {"id": 2, "stage": "contacted"},
+                     cookie=steward_cookie)
+        st, html, _ = get("/packet")
+        check("testimony packet groups read-in marks by clause",
+              st == 200 and "Testimony packet" in html
+              and "M-0005" in html and "I-4" in html)
+        st, html, _ = get("/clause/I-4")
+        check("clause has send-to-legislator mailto", "mailto:" in html
+              and "carry this bill" in urllib.parse.unquote(html))
+
         # rate limit: flood /api/mark — 12th+ within 5 min must 429
         flood = [post("/api/mark", {"body": f"flood {i}"})[0]
                  for i in range(14)]
