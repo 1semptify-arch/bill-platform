@@ -493,8 +493,7 @@ def changes(status: str | None = None,
         q += " AND c.status = ?"; args.append(status)
     if clause_id:
         q += " AND c.clause_id = ?"; args.append(clause_id)
-    q += (" ORDER BY CASE c.status WHEN 'proposed' THEN 0"
-          " WHEN 'incorporated' THEN 1 WHEN 'declined' THEN 2 ELSE 3 END, c.id")
+    q += (" ORDER BY COALESCE(c.resolved_at, c.created_at) DESC, c.id DESC")
     with connect() as con:
         return con.execute(q, args).fetchall()
 

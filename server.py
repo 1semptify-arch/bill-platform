@@ -340,7 +340,8 @@ class Handler(BaseHTTPRequestHandler):
             "/claims": lambda: views.claims(ctx),
             "/decisions": lambda: views.decisions(ctx),
             "/editions": lambda: views.editions(ctx),
-            "/changes": lambda: views.changes_page(ctx),
+            "/changes": lambda: views.changes_page(
+                q.get("s", [None])[0], ctx),
             "/mark": lambda: views.mark_form_page(
                 clause_id, q.get("re", [None])[0],
                 q.get("q", [None])[0], q.get("kind", [None])[0], ctx),

@@ -1261,9 +1261,17 @@ def _change_html(ch: dict, steward: bool = False) -> str:
 </article>"""
 
 
-def changes_page(ctx: dict) -> bytes:
-    rows = db.changes()
+def changes_page(status_filter: str | None, ctx: dict) -> bytes:
+    status_filter = status_filter if status_filter in db.CHANGE_STATUSES else None
+    rows = db.changes(status=status_filter)
     counts = db.change_counts()
+    pills = ['<a class="tb-pill%s" href="/changes">All (%d)</a>'
+             % ("-on" if not status_filter else "", sum(counts.values()))]
+    for s in db.CHANGE_STATUSES:
+        pills.append('<a class="tb-pill%s" href="/changes?s=%s">%s (%d)</a>'
+                     % ("-on" if s == status_filter else "", s,
+                        s.capitalize(), counts.get(s, 0)))
+    pills_html = '<p class="tb-items" style="margin:4px 0 14px">' + "".join(pills) + "</p>"
     open_n = counts.get("proposed", 0)
     record_form = ""
     if ctx["steward"]:
@@ -1286,7 +1294,8 @@ def changes_page(ctx: dict) -> bytes:
 <b>{open_n}</b> open proposal(s), {counts.get("incorporated", 0)} incorporated,
 {counts.get("declined", 0)} declined, {counts.get("retracted", 0)} retracted.
 Edit marks read into the Margin land here automatically; nothing is deleted,
-only resolved.</p></header>
+only resolved. <b>Newest activity first.</b></p></header>
+{pills_html}
 {record_form}
 {"".join(_change_html(ch, ctx["steward"]) for ch in rows) or
  '<p class="quiet">No changes recorded yet.</p>'}"""
