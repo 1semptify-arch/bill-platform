@@ -35,6 +35,7 @@ STATUS_WORDS = {
     "open": "open drafting",
     "target": "target", "contacted": "contacted", "talks": "in talks",
     "endorsed": "endorsed", "retracted": "retracted", "proposed": "proposed",
+    "published": "published",
 }
 REQ_NEXT = {"new": "reviewing", "reviewing": "scheduled",
             "scheduled": "incorporated"}
@@ -98,6 +99,7 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
         ("/teach", "Teach"),
         ("/track", "Track"),
         ("/campaign", "Campaign"),
+        ("/sign", "Sign the Bill"),
         ("/positions", "Positions"),
         ("/claims", "Claims Ledger"),
         ("/decisions", "Locked Decisions"),
@@ -199,7 +201,7 @@ def page(title: str, body: str, ctx: dict,
   <a href="/claims">Claims</a> · <a href="/decisions">Decisions</a> ·
   <a href="/editions">Editions</a> · <a href="/changes">Changes</a> ·
   <a href="/search">Search</a> · <a href="/teach">Teach</a> ·
-  <a href="/track">Track</a> · <a href="/campaign">Campaign</a> · <a href="/tv">TV Present</a> ·
+  <a href="/track">Track</a> · <a href="/campaign">Campaign</a> · <a href="/sign">Sign</a> · <a href="/tv">TV Present</a> ·
   <a href="https://semptify.org">semptify.org</a></p>
 </footer>
 {_mobile_bottom_nav(ctx)}
@@ -1395,6 +1397,10 @@ def search_page(term: str, ctx: dict) -> bytes:
              f'— {esc(r["change"][:140])}'),
             ("Decisions", res["decisions"], lambda r:
              f'<a href="/decisions"><b>D-{r["num"]:02d}</b></a> — {esc(r["title"])}'),
+            ("Signatures", res["signatures"], lambda r:
+             f'<a href="/sign"><b>{esc(r["public_no"] or "S—")}</b></a> '
+             f'— {esc(r["name"])}'
+             f'{", " + esc(r["org_or_town"]) if r["org_or_town"] else ""}'),
         )
         for name, rows, render in groups:
             if rows:
@@ -1424,9 +1430,11 @@ def track_page(code: str, new: str, ctx: dict) -> bytes:
     rec = db.by_receipt(code)
     banner = ""
     if new and code:
+        kind = {"mark": "mark", "request": "request",
+                "signature": "signature"}.get(new, "submission")
         banner = (f'<div class="notice-ok" role="status"><b>Received into intake.</b> '
                   f'Your private receipt code is <b class="rc">{esc(code)}</b> — '
-                  f'save it. It is the only way to check your {"mark" if new == "mark" else "request"}\'s '
+                  f'save it. It is the only way to check your {kind}\'s '
                   f'status; it is never shown publicly.</div>')
     found = ""
     if code and rec:
@@ -1438,6 +1446,13 @@ def track_page(code: str, new: str, ctx: dict) -> bytes:
             found = (f'<article class="mark"><p class="mno"><b>Mark</b> '
                      f'{_status(state)}{_clause_label(rec["clause_id"]) if rec["clause_id"] else ""}</p>'
                      f'<p>{pub} · submitted {esc(rec["created_at"])}</p></article>')
+        elif rec["type"] == "signature":
+            pub = (f' — published as <b>{esc(rec["public_no"])}</b> in the '
+                   f'<a href="/sign">signature book</a>'
+                   if rec["public_no"] else " — awaiting steward publish")
+            found = (f'<article class="mark"><p class="mno"><b>Signature</b> '
+                     f'{_status(rec["status"])}</p>'
+                     f'<p>{pub} · signed {esc(rec["created_at"])}</p></article>')
         else:
             found = (f'<article class="mark"><p class="mno"><b>Request</b> '
                      f'{_status(rec["status"])} · <b>{esc(rec["public_no"])}</b></p>'
@@ -1592,6 +1607,8 @@ endorsed · {counts.get("talks", 0)} in talks · {counts.get("contacted", 0)} co
 
 <section><h2>Do one thing</h2>
 <ul class="ev">
+  <li><a href="/sign"><b>Sign the bill</b></a> — the voluntary signature
+  book; your name publishes only when a steward reads it in.</li>
   <li><a href="/mark"><b>Mark the draft</b></a> — your name never publishes
   without read-in; your words can reach a hearing.</li>
   <li><a href="/requests"><b>Request a briefing or take a position</b></a> —
@@ -1614,6 +1631,76 @@ endorsed · {counts.get("talks", 0)} in talks · {counts.get("contacted", 0)} co
         ("Testimony packet", "/packet", "link"),
         ("Teach it", "/teach", "link"),
     ], "Campaign tools")
+
+
+def sign_page(ctx: dict) -> bytes:
+    """The voluntary signature book — like a visitor's book at a town
+    hall. Signing is opt-in, lands dark, and only the consented fields
+    (name, org/town, note) publish when a steward reads it in. The
+    optional email never renders — it is the OAuth-storage seam."""
+    published = db.signatures(status="published")
+    pending = db.signatures(status="queued") if ctx["steward"] else []
+    rows = []
+    for s in published:
+        who = f'<b>{esc(s["name"])}</b>'
+        if s["org_or_town"]:
+            who += f' <span class="quiet">— {esc(s["org_or_town"])}</span>'
+        line = f'<p class="quiet">{esc(s["note"])}</p>' if s["note"] else ""
+        rows.append(f'<li>{who} <span class="quiet">· {esc(s["public_no"] or "")}'
+                    f' · {esc((s["published_at"] or s["created_at"])[:10])}'
+                    f'</span>{line}</li>')
+    book = (f'<ul class="ev">{"".join(rows)}</ul>' if rows else
+            '<p class="quiet">The book is open — the first names publish '
+            'here once a steward reads them in.</p>')
+    pend = ""
+    if ctx["steward"] and pending:
+        items = []
+        for s in pending:
+            items.append(f"""
+<li><b>{esc(s["name"])}</b>{(", " + esc(s["org_or_town"])) if s["org_or_town"] else ""}
+  <span class="quiet">· {esc(s["created_at"][:10])}</span>
+  {f'<br><span class="quiet">{esc(s["note"])}</span>' if s["note"] else ""}
+  <form method="post" action="/api/sign_action" class="acts">
+    <input type="hidden" name="id" value="{s["id"]}">
+    <button class="btn" name="action" value="published">Publish</button>
+    <button class="btn ghost" name="action" value="held">Hold</button>
+  </form></li>""")
+        pend = (f'<section><h2>Awaiting publish ({len(pending)})</h2>'
+                f'<ul class="ev">{"".join(items)}</ul></section>')
+    body = f"""
+<header class="mast"><h1>Sign the bill</h1>
+<p class="lede">A voluntary signature book — like the visitor's book at a
+town hall. Signing says: <i>I stand behind the Minnesota Rent Assurance
+&amp; Deposit Protection Act.</i> Nothing is required but your name; it
+publishes only after a steward reads it in. The book can be printed and
+carried to a hearing.</p></header>
+<section><h2>Add your name</h2>
+<form method="post" action="/api/sign" class="stack">
+  <label>Your name <input name="name" required autocomplete="name"
+    placeholder="As you want it published — e.g. A. Renter, St. Paul"></label>
+  <div class="row">
+    <label>Org or town <span class="quiet">(optional — published)</span>
+      <input name="org" placeholder="e.g. Frogtown, HOME Line"></label>
+    <label>Email <span class="quiet">(optional — never published)</span>
+      <input name="email" type="email" autocomplete="email"></label>
+  </div>
+  <label>A line for the record <span class="quiet">(optional — published)</span>
+    <input name="note" maxlength="200"
+      placeholder="e.g. My deposit should be working for me, not sitting in someone's drawer."></label>
+  <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <label class="consent"><input type="checkbox" name="consent" value="yes"
+    required> Publish my name — I understand my name, org/town, and line
+    will appear publicly when a steward reads this in. Email is never
+    published.</label>
+  <button class="btn" type="submit">Sign the book</button>
+</form></section>
+<section><h2>The book ({len(published)})</h2>{book}</section>
+{pend}"""
+    return page("Sign the Bill", body, ctx, [
+        ("Mark the draft", "/mark", "primary"),
+        ("Campaign", "/campaign", "link"),
+        ("The margin", "/margin", "link"),
+    ], "Sign the bill")
 
 
 def packet(ctx: dict) -> bytes:

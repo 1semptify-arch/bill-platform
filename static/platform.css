@@ -314,6 +314,8 @@ a.next { font-weight: 700; color: var(--link); }
 .stack .row { display: flex; gap: 14px; }
 .stack .row label { flex: 1; }
 .crisis { font-size: 0.84rem; color: var(--mut); margin-top: 16px; }
+.stack label.consent { display: flex; gap: 10px; align-items: flex-start; }
+.stack label.consent input { width: auto; margin-top: 3px; }
 .btn {
   margin-top: 14px; padding: 9px 18px; font: inherit; font-size: 0.88rem; font-weight: 600;
   background: var(--ink); color: #fff; border: 0; border-radius: 5px; cursor: pointer;

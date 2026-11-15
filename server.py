@@ -374,6 +374,7 @@ class Handler(BaseHTTPRequestHandler):
                                                q.get("new", [""])[0], ctx),
             "/teach": lambda: views.teach_page(ctx),
             "/campaign": lambda: views.campaign(ctx),
+            "/sign": lambda: views.sign_page(ctx),
             "/packet": lambda: views.packet(ctx),
             "/mark": lambda: views.mark_form_page(
                 clause_id, q.get("re", [None])[0],
@@ -417,7 +418,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             return
 
-        if path in ("/api/mark", "/api/request"):
+        if path in ("/api/mark", "/api/request", "/api/sign"):
             if form.get("website"):  # honeypot — only bots fill it
                 self._redirect("/margin")
                 return
@@ -519,6 +520,31 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 pass
             self._redirect("/changes")
+            return
+
+        if path == "/api/sign":
+            name = self._one(form, "name", 200)
+            if not name or self._one(form, "consent", 10) != "yes":
+                self._send(b"signing needs a name and the publish consent",
+                           422, "text/plain; charset=utf-8")
+                return
+            rc = db.add_signature(name, self._one(form, "org", 200),
+                                  self._one(form, "note", 400),
+                                  self._one(form, "email", 200))
+            self._redirect(f"/track?code={rc}&new=signature")
+            return
+
+        if path == "/api/sign_action":
+            if not self._is_steward():
+                self._send(b"steward unlock required for the signature book",
+                           403, "text/plain; charset=utf-8")
+                return
+            try:
+                db.signature_action(int(self._one(form, "id", 20)),
+                                    self._one(form, "action", 20))
+            except ValueError:
+                pass
+            self._redirect("/sign")
             return
 
         if path == "/api/supporter":

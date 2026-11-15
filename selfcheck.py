@@ -435,6 +435,36 @@ def main() -> int:
         check("clause has send-to-legislator mailto", "mailto:" in html
               and "carry this bill" in urllib.parse.unquote(html))
 
+        # signature book: voluntary, dark until steward publishes
+        st, _ = post("/api/sign", {"name": "No Consent Person"})
+        check("signature requires name + consent", st == 422)
+        st, hdrs = post("/api/sign", {
+            "name": "Dena C.", "org": "Frogtown",
+            "note": "Deposits should protect renters.",
+            "email": "dena@example.org", "consent": "yes"})
+        check("signature POST redirects to /track with receipt", st == 303
+              and "/track?code=" in (hdrs.get("Location") or ""))
+        sig_rc = urllib.parse.parse_qs(urllib.parse.urlparse(
+            hdrs.get("Location", "")).query)["code"][0]
+        st, html, _ = get("/sign")
+        check("queued signature stays dark publicly", st == 200
+              and "Dena C." not in html and "The book" in html)
+        st, exp, _ = get("/api/export", cookie=steward_cookie)
+        sig_id = json.loads(exp)["signatures"][-1]["id"]
+        st, _ = post("/api/sign_action",
+                     {"id": sig_id, "action": "published"})
+        check("unauthenticated POST /api/sign_action -> 403", st == 403)
+        st, _ = post("/api/sign_action",
+                     {"id": sig_id, "action": "published"},
+                     cookie=steward_cookie)
+        st, html, _ = get("/sign")
+        check("steward publishes signature, email stays hidden", st == 200
+              and "Dena C." in html and "Frogtown" in html
+              and "S-0001" in html and "dena@example.org" not in html)
+        st, html, _ = get(f"/track?code={sig_rc}")
+        check("receipt shows published signature", st == 200
+              and "S-0001" in html)
+
         # rate limit: flood /api/mark — 12th+ within 5 min must 429
         flood = [post("/api/mark", {"body": f"flood {i}"})[0]
                  for i in range(14)]

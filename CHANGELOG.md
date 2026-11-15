@@ -95,3 +95,13 @@ the DB auto-restores on boot — no paid disk needed. `PORT`/`HOST` and
 `PLATFORM_DB` are now env-driven. Cloudflare's role stays front-door
 only (DNS + TLS at platform.semptify.org). `AGENTS.md` updated:
 loopback is now the local-dev rule, not the only mode.
+
+### The signature book — `/sign`
+A voluntary endorsement list, like the visitor's book at a town hall.
+Anyone can sign their name to the bill — it lands dark (queued) with a
+private receipt, and only publishes when a steward reads it in, with an
+S-number. Only name, org/town, and the optional line ever render; the
+consent checkbox is required, and the optional email never publishes —
+that field is the seam where OAuth storage plugs in later. Stewards get
+an "Awaiting publish" queue on the page with Publish/Hold. Wired into
+nav, footer, search, receipts, export, and the campaign's do-one-thing.

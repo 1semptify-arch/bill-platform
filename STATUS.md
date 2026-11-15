@@ -80,7 +80,13 @@ Plan: actuarial verify → coalition → testimony via margin → file Jan
   idle (~30 s cold wake).
 - Contact fields note: when this joins the semptify.org family under
   the OAuth-storage keystone, contact data should move to that pattern
-  or be dropped (public-side PII rule).
+  or be dropped (public-side PII rule). The signature book's optional
+  `email` field is the designated OAuth-storage seam — name/org/note
+  are consented-publish fields and stay in the ledger.
+- Signature book live at `/sign` — voluntary endorsement list; signs
+  land `queued` (dark) with a private receipt; steward publishes →
+  S-number; only name/org/town/note render publicly. Consent checkbox
+  required at submit; honeypot + rate limit apply.
 
 ## Files
 

@@ -150,6 +150,19 @@ CREATE TABLE IF NOT EXISTS supporters (
     note      TEXT,
     noted_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS signatures (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_no    TEXT UNIQUE,            -- S-0001, issued at publish only
+    name         TEXT NOT NULL,          -- consented to publish
+    org_or_town  TEXT,                   -- consented to publish
+    note         TEXT,                   -- optional public line
+    email        TEXT,                   -- private; OAuth-storage seam later
+    status       TEXT NOT NULL DEFAULT 'queued'
+                 CHECK (status IN ('queued','published','held')),
+    receipt      TEXT,                   -- signer's status-lookup code
+    created_at   TEXT NOT NULL,
+    published_at TEXT
+);
 CREATE TABLE IF NOT EXISTS changes (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     public_no     TEXT UNIQUE,            -- CH-0001
@@ -510,6 +523,59 @@ def supporter_stage(supporter_id: int, stage: str,
         return cur.rowcount > 0
 
 
+def add_signature(name: str, org_or_town: str | None, note: str | None,
+                  email: str | None) -> str:
+    """A voluntary signature lands dark ('queued'). Email is private —
+    the OAuth-storage seam when that keystone ships."""
+    receipt = secrets.token_hex(4)
+    with connect() as con:
+        con.execute(
+            "INSERT INTO signatures (name, org_or_town, note, email, status,"
+            " receipt, created_at) VALUES (?,?,?,?,'queued',?,?)",
+            (name.strip(), (org_or_town or "").strip() or None,
+             (note or "").strip() or None, (email or "").strip() or None,
+             receipt, utc_now()))
+    return receipt
+
+
+def signatures(status: str | None = None) -> list[sqlite3.Row]:
+    with connect() as con:
+        if status:
+            return con.execute(
+                "SELECT id, public_no, name, org_or_town, note, status,"
+                " created_at, published_at FROM signatures WHERE status = ?"
+                " ORDER BY published_at DESC, id DESC", (status,)).fetchall()
+        return con.execute(
+            "SELECT id, public_no, name, org_or_town, note, status,"
+            " created_at, published_at FROM signatures"
+            " ORDER BY CASE status WHEN 'queued' THEN 0 ELSE 1 END,"
+            " id DESC").fetchall()
+
+
+def sign_pending_count() -> int:
+    with connect() as con:
+        return con.execute(
+            "SELECT COUNT(*) FROM signatures WHERE status='queued'"
+        ).fetchone()[0]
+
+
+def signature_action(sig_id: int, action: str) -> str | None:
+    """queued|held -> published (issues S-number) | held."""
+    if action not in ("published", "held"):
+        return None
+    with connect() as con:
+        public_no = _next_no(con, "signatures", "S") \
+            if action == "published" else None
+        con.execute(
+            "UPDATE signatures SET status = ?,"
+            " public_no = COALESCE(public_no, ?),"
+            " published_at = CASE WHEN ? = 'published'"
+            " THEN COALESCE(published_at, ?) ELSE published_at END"
+            " WHERE id = ?",
+            (action, public_no, action, utc_now(), sig_id))
+        return public_no
+
+
 def positions() -> list[sqlite3.Row]:
     with connect() as con:
         return con.execute("SELECT * FROM positions ORDER BY id").fetchall()
@@ -593,6 +659,12 @@ def by_receipt(code: str) -> dict | None:
             (code,)).fetchone()
         if r:
             d = dict(r); d["type"] = "request"; return d
+        r = con.execute(
+            "SELECT public_no, status, created_at, published_at"
+            " FROM signatures WHERE receipt = ?",
+            (code,)).fetchone()
+        if r:
+            d = dict(r); d["type"] = "signature"; return d
     return None
 
 
@@ -627,6 +699,11 @@ def search(term: str) -> dict:
             "decisions": con.execute(
                 "SELECT num, clause, title FROM decisions WHERE title LIKE ?"
                 " OR why LIKE ? OR clause LIKE ?", (like,) * 3).fetchall(),
+            "signatures": con.execute(
+                "SELECT public_no, name, org_or_town FROM signatures"
+                " WHERE status = 'published' AND (public_no LIKE ?"
+                " OR name LIKE ? OR org_or_town LIKE ?)"
+                " ORDER BY published_at DESC", (like,) * 3).fetchall(),
         }
 
 
@@ -634,7 +711,8 @@ def export_state() -> dict:
     """Full backup for a steward — includes intake and contact fields,
     which is why this only serves behind the steward gate."""
     tables = ("titles", "clauses", "claims", "decisions", "journey",
-              "editions", "marks", "changes", "requests", "positions")
+              "editions", "marks", "changes", "requests", "positions",
+              "supporters", "signatures")
     with connect() as con:
         return {"meta": meta(),
                 **{t: [dict(r) for r in con.execute(
