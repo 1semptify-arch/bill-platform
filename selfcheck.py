@@ -285,6 +285,45 @@ def main() -> int:
         check("crisis-routed mark never public",
               "emergency eviction tomorrow" not in html)
 
+        # ---- 4b. Change ledger: edit marks auto-record, steward resolves -
+        st, _ = post("/api/mark", {
+            "clause_id": "I-4", "kind": "edit",
+            "quote": "not recoverable from the tenant",
+            "proposed": "not recoverable from the tenant or any successor",
+            "body": "Close the assignee loophole in no-subrogation."})
+        eid = newest_queued_mark_id()
+        st, _ = post("/api/mark_action", {"id": eid, "action": "read_in"},
+                     cookie=steward_cookie)
+        st, html, _ = get("/changes")
+        check("read-in edit mark auto-records CH-0001 proposed", st == 200
+              and "CH-0001" in html and "proposed" in html
+              and "not recoverable from the tenant or any successor" in html)
+
+        st, html, _ = get("/clause/I-4")
+        check("clause page shows change history", "CH-0001" in html
+              and "Change history" in html)
+
+        st, _ = post("/api/change_status", {"id": 1, "action": "incorporated"})
+        check("unauthenticated POST /api/change_status -> 403", st == 403)
+
+        pst, _ = post("/api/change_status", {
+            "id": 1, "action": "incorporated", "edition": "E-10",
+            "new_text": "A claim paid from the pool or escrow is final and is"
+                        " not recoverable from the tenant or any successor."},
+            cookie=steward_cookie)
+        st, html, _ = get("/changes")
+        check("steward incorporates change w/ edition + diff", pst == 303
+              and "E-10" in html and "incorporated" in html
+              and "any successor" in html)
+        check("diff keeps old text visible", "Was:" in html and "Now:" in html)
+
+        st, _ = post("/api/change", {
+            "clause_id": "II-1", "proposed_text": "Extend coverage term to 9 months",
+            "note": "From R-0001 briefing"}, cookie=steward_cookie)
+        st, html, _ = get("/changes")
+        check("steward manual change record -> CH-0002", "CH-0002" in html
+              and "Extend coverage term" in html)
+
         # ---- 5. Requests Desk + Steward Status Pipeline ----------------
         st, _ = post("/api/request", {
             "req_type": "amendment", "summary": "Pin the II-3 split ratio",

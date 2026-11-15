@@ -132,6 +132,23 @@ CREATE TABLE IF NOT EXISTS positions (
     noted_at  TEXT NOT NULL,
     source    TEXT
 );
+CREATE TABLE IF NOT EXISTS changes (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_no     TEXT UNIQUE,            -- CH-0001
+    clause_id     TEXT REFERENCES clauses(id),
+    source_mark   INTEGER REFERENCES marks(id),
+    edition       TEXT,                   -- edition that incorporated it (E-10…)
+    quote_text    TEXT,                   -- statute passage the change targets
+    proposed_text TEXT,                   -- proposed wording
+    old_text      TEXT,                   -- statute text before (snapshot)
+    new_text      TEXT,                   -- statute text after
+    note          TEXT,
+    status        TEXT NOT NULL DEFAULT 'proposed'
+                  CHECK (status IN ('proposed','incorporated','declined',
+                                    'retracted')),
+    created_at    TEXT NOT NULL,
+    resolved_at   TEXT
+);
 """
 
 
@@ -155,10 +172,11 @@ def connect(path: Path | None = None):
 
 def _next_no(con, table: str, prefix: str) -> str:
     row = con.execute(
-        f"SELECT public_no FROM {table} WHERE public_no IS NOT NULL"
-        f" ORDER BY CAST(SUBSTR(public_no,3) AS INTEGER) DESC LIMIT 1"
+        f"SELECT public_no FROM {table} WHERE public_no LIKE '{prefix}-%'"
+        f" ORDER BY CAST(SUBSTR(public_no,{len(prefix) + 2}) AS INTEGER)"
+        " DESC LIMIT 1"
     ).fetchone()
-    nxt = (int(row["public_no"][2:]) + 1) if row else 1
+    nxt = (int(row["public_no"][len(prefix) + 1:]) + 1) if row else 1
     return f"{prefix}-{nxt:04d}"
 
 
@@ -397,6 +415,9 @@ def last_event() -> sqlite3.Row | None:
             "  UNION ALL"
             "  SELECT 'position: ' || person, noted_at FROM positions"
             "  UNION ALL"
+            "  SELECT 'change ' || public_no || ' — ' || status,"
+            "       COALESCE(resolved_at, created_at) FROM changes"
+            "  UNION ALL"
             "  SELECT 'edition ' || edition, date FROM editions"
             ") ORDER BY happened_at DESC LIMIT 1").fetchone()
 
@@ -441,7 +462,94 @@ def mark_action(mark_id: int, action: str,
             (action, utc_now(), public_no, resp,
              (responder or "").strip() or ("Drafting Table" if resp else None),
              mark_id))
+        if action == "read_in":
+            # Edit-kind marks carry proposed wording — record them on the
+            # public change ledger automatically so no proposal is lost.
+            row = con.execute(
+                "SELECT kind, clause_id, quote_text, proposed_text, body"
+                " FROM marks WHERE id = ?", (mark_id,)).fetchone()
+            if row and row["kind"] == "edit" and (
+                    row["proposed_text"] or row["quote_text"]):
+                ch_no = _next_no(con, "changes", "CH")
+                con.execute(
+                    "INSERT INTO changes (public_no, clause_id, source_mark,"
+                    " quote_text, proposed_text, note, status, created_at)"
+                    " VALUES (?,?,?,?,?,?,'proposed',?)",
+                    (ch_no, row["clause_id"], mark_id, row["quote_text"],
+                     row["proposed_text"], row["body"], utc_now()))
     return public_no
+
+
+# ---------- change ledger ----------
+
+CHANGE_STATUSES = ("proposed", "incorporated", "declined", "retracted")
+
+
+def changes(status: str | None = None,
+            clause_id: str | None = None) -> list[sqlite3.Row]:
+    q, args = ("SELECT c.*, m.public_no AS mark_no FROM changes c"
+               " LEFT JOIN marks m ON m.id = c.source_mark WHERE 1=1"), []
+    if status:
+        q += " AND c.status = ?"; args.append(status)
+    if clause_id:
+        q += " AND c.clause_id = ?"; args.append(clause_id)
+    q += (" ORDER BY CASE c.status WHEN 'proposed' THEN 0"
+          " WHEN 'incorporated' THEN 1 WHEN 'declined' THEN 2 ELSE 3 END, c.id")
+    with connect() as con:
+        return con.execute(q, args).fetchall()
+
+
+def change_counts() -> dict[str, int]:
+    with connect() as con:
+        return {r["status"]: r["n"] for r in con.execute(
+            "SELECT status, COUNT(*) AS n FROM changes GROUP BY status")}
+
+
+def add_change(clause_id: str | None, proposed_text: str, quote: str | None,
+               note: str | None) -> str:
+    """Steward-recorded proposed change (requests lane, briefings, etc.)."""
+    with connect() as con:
+        ch_no = _next_no(con, "changes", "CH")
+        con.execute(
+            "INSERT INTO changes (public_no, clause_id, quote_text,"
+            " proposed_text, note, status, created_at)"
+            " VALUES (?,?,?,?,?,'proposed',?)",
+            (ch_no, clause_id or None, (quote or "").strip() or None,
+             proposed_text.strip(), (note or "").strip() or None, utc_now()))
+    return ch_no
+
+
+def change_action(change_id: int, action: str, edition: str | None = None,
+                  new_text: str | None = None,
+                  note: str | None = None) -> bool:
+    """proposed -> incorporated (records old/new text + edition) |
+    declined | retracted."""
+    if action not in ("incorporated", "declined", "retracted"):
+        return False
+    with connect() as con:
+        row = con.execute(
+            "SELECT clause_id FROM changes WHERE id = ?", (change_id,)
+        ).fetchone()
+        if not row:
+            return False
+        old = None
+        if action == "incorporated" and row["clause_id"]:
+            old = con.execute(
+                "SELECT statute_text FROM clauses WHERE id = ?",
+                (row["clause_id"],)).fetchone()
+            old = old["statute_text"] if old else None
+        n = (note or "").strip() or None
+        con.execute(
+            "UPDATE changes SET status = ?, resolved_at = ?,"
+            " edition = COALESCE(?, edition),"
+            " old_text = COALESCE(old_text, ?),"
+            " new_text = COALESCE(?, new_text),"
+            " note = CASE WHEN ? IS NULL THEN note"
+            "           ELSE COALESCE(note,'') || ' ' || ? END"
+            " WHERE id = ?",
+            (action, utc_now(), (edition or "").strip() or None, old,
+             (new_text or "").strip() or None, n, n, change_id))
+    return True
 
 
 def add_request(req_type: str, summary: str, details: str | None,

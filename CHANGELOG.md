@@ -54,3 +54,12 @@ dependencies. 23 bill clauses seeded with statute + plain language, the
 claims ledger, locked decisions, editions, public marks with dark intake
 → steward read-in → numbered public margin, requests pipeline, positions,
 and three screen modes. End-to-end `selfcheck.py` harness.
+
+### Next — Change ledger: every proposed and incorporated change on record
+New `/changes` page — a permanent ledger where every edit-kind mark read
+into the Margin automatically lands as a numbered proposed change
+(CH-0001…). Stewards can also record proposals from the requests/briefing
+lane, then incorporate them (with edition ref + before/after statute
+diff), decline, or retract — nothing is deleted, only resolved. Each
+clause page now shows its own change history. Fixed `_next_no` to support
+multi-letter prefixes (CH-).

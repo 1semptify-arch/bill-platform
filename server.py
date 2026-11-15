@@ -340,6 +340,7 @@ class Handler(BaseHTTPRequestHandler):
             "/claims": lambda: views.claims(ctx),
             "/decisions": lambda: views.decisions(ctx),
             "/editions": lambda: views.editions(ctx),
+            "/changes": lambda: views.changes_page(ctx),
             "/mark": lambda: views.mark_form_page(
                 clause_id, q.get("re", [None])[0],
                 q.get("q", [None])[0], q.get("kind", [None])[0], ctx),
@@ -439,6 +440,38 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 pass
             self._redirect("/requests")
+            return
+
+        if path == "/api/change":
+            if not self._is_steward():
+                self._send(b"steward unlock required to record a change", 403,
+                           "text/plain; charset=utf-8")
+                return
+            proposed = self._one(form, "proposed_text", 2000)
+            if not proposed:
+                self._send(b"a change needs proposed wording", 422,
+                           "text/plain; charset=utf-8")
+                return
+            db.add_change(self._one(form, "clause_id", 40) or None,
+                          proposed, self._one(form, "quote_text", 2000),
+                          self._one(form, "note", 1000))
+            self._redirect("/changes")
+            return
+
+        if path == "/api/change_status":
+            if not self._is_steward():
+                self._send(b"steward unlock required for change triage", 403,
+                           "text/plain; charset=utf-8")
+                return
+            try:
+                db.change_action(int(self._one(form, "id", 20)),
+                                 self._one(form, "action", 20),
+                                 self._one(form, "edition", 20) or None,
+                                 self._one(form, "new_text", 4000) or None,
+                                 self._one(form, "note", 1000) or None)
+            except ValueError:
+                pass
+            self._redirect("/changes")
             return
 
         if path == "/api/position":

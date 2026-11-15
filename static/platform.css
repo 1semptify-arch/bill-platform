@@ -282,6 +282,8 @@ a.next { font-weight: 700; color: var(--link); }
 .st-conditional, .st-modeled, .st-next, .st-neutral {
   background: var(--due-bg); color: var(--due-fg);
 }
+.st-proposed { color: var(--amber, #8a6d1f); border-color: var(--amber, #8a6d1f); }
+.st-retracted { color: var(--mut); border-color: var(--mut); text-decoration: line-through; }
 .st-read_in, .st-done, .st-support, .st-verified, .st-incorporated,
 .st-scheduled, .st-current { background: var(--ok-bg); color: var(--ok-fg); }
 .st-held, .st-declined, .st-oppose, .st-crisis_routed {
@@ -448,3 +450,8 @@ a.next { font-weight: 700; color: var(--link); }
   .stack .row { flex-direction: column; gap: 0; }
   .clause { padding-left: 52px; }
 }
+
+/* ---------- change ledger diff blocks ---------- */
+.ch-diff { border-left: 2px solid var(--line); padding-left: 14px; margin: 8px 0; }
+.ch-old { color: var(--mut); text-decoration: line-through; }
+.ch-new { color: var(--ink); }

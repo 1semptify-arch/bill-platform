@@ -91,6 +91,7 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
         ("/calculator", "Funding Braid"),
         ("/margin", "Public Margin"),
         ("/requests", f"Requests ({n_req})"),
+        ("/changes", "Changes"),
         ("/positions", "Positions"),
         ("/claims", "Claims Ledger"),
         ("/decisions", "Locked Decisions"),
@@ -184,7 +185,8 @@ def page(title: str, body: str, ctx: dict,
   <a href="/margin">The margin</a> · <a href="/intake">Intake</a> ·
   <a href="/requests">Requests</a> · <a href="/positions">Positions</a> ·
   <a href="/claims">Claims</a> · <a href="/decisions">Decisions</a> ·
-  <a href="/editions">Editions</a> · <a href="/tv">TV Present</a> ·
+  <a href="/editions">Editions</a> · <a href="/changes">Changes</a> ·
+  <a href="/tv">TV Present</a> ·
   <a href="https://semptify.org">semptify.org</a></p>
 </footer>
 {_mobile_bottom_nav(ctx)}
@@ -577,6 +579,18 @@ def clause_view(cid: str, ctx: dict) -> bytes | None:
     refs_html = (f'<section class="refs"><h2>Standing on</h2>'
                  f'<ul class="ev">{"".join(refs)}</ul></section>' if refs else "")
 
+    ch_rows = db.changes(clause_id=cid)
+    hist_html = ""
+    if ch_rows:
+        items = "".join(
+            f'<li><a href="/changes"><b>{esc(ch["public_no"])}</b></a> '
+            f'{_status(ch["status"])} <span class="quiet">'
+            f'{esc(ch["resolved_at"] or ch["created_at"])}</span>'
+            + (f' — {esc(ch["proposed_text"])}' if ch["proposed_text"] else "")
+            + "</li>" for ch in ch_rows)
+        hist_html = (f'<section class="refs"><h2>Change history ({len(ch_rows)})</h2>'
+                     f'<ul class="ev">{items}</ul></section>')
+
     plain = (f'<p class="plain"><b>In plain language:</b> '
              f'{esc(c["plain_text"])}</p>') if c["plain_text"] else ""
 
@@ -591,6 +605,7 @@ def clause_view(cid: str, ctx: dict) -> bytes | None:
 {notes_html}
 <nav class="pnav" aria-label="Adjacent clauses">{' '.join(nav)}</nav>
 {refs_html}
+{hist_html}
 <section id="margin" class="margin-block">
   <h2>The margin on {esc(cid)} ({len(rows)})</h2>
   {margin_html}
@@ -1203,6 +1218,84 @@ def editions(ctx: dict) -> bytes:
         ("The margin", "/margin", "link"),
         ("Decisions", "/decisions", "link"),
     ], "Change history tools")
+
+
+def _change_html(ch: dict, steward: bool = False) -> str:
+    src = (f' · re: <b>{esc(ch["mark_no"])}</b>' if ch["mark_no"] else "")
+    ed = (f' · edition <b>{esc(ch["edition"])}</b>' if ch["edition"] else "")
+    diff = ""
+    if ch["status"] == "incorporated" and (ch["old_text"] or ch["new_text"]):
+        diff = ('<div class="ch-diff">'
+                + (f'<p class="ch-old"><b>Was:</b> {esc(ch["old_text"])}</p>'
+                   if ch["old_text"] else "")
+                + (f'<p class="ch-new"><b>Now:</b> {esc(ch["new_text"])}</p>'
+                   if ch["new_text"] else "") + '</div>')
+    acts = ""
+    if steward and ch["status"] == "proposed":
+        acts = f"""
+  <form method="post" action="/api/change_status" class="stack">
+    <input type="hidden" name="id" value="{ch['id']}">
+    <div class="row"><input name="edition" placeholder="Edition ref (e.g. E-10)" maxlength="20">
+    <input name="note" placeholder="Note (optional)" maxlength="500"></div>
+    <textarea name="new_text" rows="2" placeholder="Statute text as incorporated (optional)"></textarea>
+    <div class="row"><button name="action" value="incorporated">Incorporate</button>
+    <button name="action" value="declined" class="ghost">Decline</button></div>
+  </form>"""
+    elif steward and ch["status"] == "incorporated":
+        acts = f"""
+  <form method="post" action="/api/change_status" class="stack">
+    <input type="hidden" name="id" value="{ch['id']}">
+    <div class="row"><input name="note" placeholder="Retraction note" maxlength="500">
+    <button name="action" value="retracted" class="ghost">Retract</button></div>
+  </form>"""
+    return f"""
+<article class="mark">
+  <p class="mno"><b>{esc(ch['public_no'])}</b> {_status(ch['status'])} ·
+    {_clause_label(ch['clause_id']) if ch['clause_id'] else 'whole draft'}{src}{ed} ·
+    <span class="quiet">{esc(ch['resolved_at'] or ch['created_at'])}</span></p>
+  {'<blockquote class="quote">“' + esc(ch["quote_text"]) + '”</blockquote>' if ch["quote_text"] else ""}
+  {'<p class="proposed"><b>Proposed:</b> ' + esc(ch["proposed_text"]) + '</p>' if ch["proposed_text"] else ""}
+  {diff}
+  {'<p class="quiet">' + esc(ch["note"]) + '</p>' if ch["note"] else ""}
+  {acts}
+</article>"""
+
+
+def changes_page(ctx: dict) -> bytes:
+    rows = db.changes()
+    counts = db.change_counts()
+    open_n = counts.get("proposed", 0)
+    record_form = ""
+    if ctx["steward"]:
+        opts = "".join(
+            f'<option value="{esc(c["id"])}">{esc(c["id"])} — {esc(c["heading"])}</option>'
+            for c in db.clauses())
+        record_form = f"""
+<details class="stack"><summary><b>Record a proposed change</b> (steward)</summary>
+<form method="post" action="/api/change" class="stack">
+  <div class="row"><select name="clause_id"><option value="">— whole draft —</option>{opts}</select></div>
+  <input name="quote_text" placeholder="Passage it targets (optional)">
+  <textarea name="proposed_text" rows="3" required
+            placeholder="Proposed wording"></textarea>
+  <input name="note" placeholder="Source / note (e.g. R-0003, briefing)">
+  <div class="row"><button>Record CH</button></div>
+</form></details>"""
+    body = f"""
+<header class="mast"><h1>Changes</h1>
+<p class="lede">Every proposed and incorporated change on the record —
+<b>{open_n}</b> open proposal(s), {counts.get("incorporated", 0)} incorporated,
+{counts.get("declined", 0)} declined, {counts.get("retracted", 0)} retracted.
+Edit marks read into the Margin land here automatically; nothing is deleted,
+only resolved.</p></header>
+{record_form}
+{"".join(_change_html(ch, ctx["steward"]) for ch in rows) or
+ '<p class="quiet">No changes recorded yet.</p>'}"""
+    return page("Changes", body, ctx, [
+        ("The draft", "/bill", "primary"),
+        ("The margin", "/margin", "link"),
+        ("Editions", "/editions", "link"),
+        ("Requests", "/requests", "link"),
+    ], "Change ledger tools")
 
 
 def not_found(ctx: dict) -> bytes:
