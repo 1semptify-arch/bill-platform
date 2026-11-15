@@ -84,7 +84,8 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
     n_q = db.queue_count()
     n_req = db.open_request_count()
     nav_items = [
-        ("/", "Desk"),
+        ("/", "Home"),
+        ("/desk", "Desk"),
         ("/bill", "The Bill (23)"),
         ("/calculator", "Funding Braid"),
         ("/margin", "Public Margin"),
@@ -118,7 +119,7 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
 def _mobile_bottom_nav(ctx: dict) -> str:
     path = ctx["path"]
     tabs = [
-        ("/", "Desk", '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/>'),
+        ("/", "Home", '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/>'),
         ("/bill", "Bill", '<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h6M9 17h6"/>'),
         ("/calculator", "Braid", '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>'),
         ("/margin", "Margin", '<path d="M4 5h16v11H8l-4 4z"/>'),
@@ -172,14 +173,17 @@ def page(title: str, body: str, ctx: dict,
   </main>
 </div>
 <footer class="foot">
+  <p class="foot-brand"><b>Presented by <a href="https://semptify.org">Semptify</a></b>
+  — housing rights, written in public. A Minnesota nonprofit project.</p>
   <p>Working draft — nothing here is filed law. Marks land in intake and
   are read into the ledger by a person, never automatically.</p>
-  <p class="foot-nav"><a href="/">Desk</a> · <a href="/bill">The bill</a> ·
-  <a href="/calculator">Funding braid</a> · <a href="/margin">The margin</a> ·
-  <a href="/intake">Intake</a> · <a href="/requests">Requests</a> ·
-  <a href="/positions">Positions</a> · <a href="/claims">Claims</a> ·
-  <a href="/decisions">Decisions</a> · <a href="/editions">Editions</a> ·
-  <a href="/tv">TV Present</a></p>
+  <p class="foot-nav"><a href="/">Home</a> · <a href="/desk">Desk</a> ·
+  <a href="/bill">The bill</a> · <a href="/calculator">Funding braid</a> ·
+  <a href="/margin">The margin</a> · <a href="/intake">Intake</a> ·
+  <a href="/requests">Requests</a> · <a href="/positions">Positions</a> ·
+  <a href="/claims">Claims</a> · <a href="/decisions">Decisions</a> ·
+  <a href="/editions">Editions</a> · <a href="/tv">TV Present</a> ·
+  <a href="https://semptify.org">semptify.org</a></p>
 </footer>
 {_mobile_bottom_nav(ctx)}
 </div>
@@ -271,7 +275,87 @@ def _mark_form(cid: str | None, re_no: str | None,
 
 # ---------- pages ----------
 
-def home(ctx: dict) -> bytes:
+def index(ctx: dict) -> bytes:
+    meta = db.meta()
+    n_clauses = len(db.clauses())
+    counts = db.margin_counts()
+    n_marks = sum(counts.values())
+    n_eds = len(db.editions())
+    n_req = db.open_request_count()
+    body = f"""
+<section class="index-hero">
+  <p class="stage-kicker">Presented by <a href="https://semptify.org">Semptify</a> · {esc(meta['jurisdiction'])}</p>
+  <h1>{esc(meta['short_title'])}</h1>
+  <p class="lede">{esc(meta['thesis'])}</p>
+  <p class="live-badge">{_status('current')} <b>Living document</b> — last
+  publish {esc(meta['updated'])} · {n_eds} editions on the record ·
+  <a href="/editions">see the change ledger</a></p>
+  <p class="hero-acts"><a class="btn" href="/bill">Read the draft</a>
+    <a class="btn ghost" href="/tv">TV briefing deck</a>
+    <a class="btn ghost" href="/calculator">Funding calculator</a></p>
+</section>
+
+<section>
+  <h2>Introduction — what this is</h2>
+  <p>This platform presents a real, working bill — the Minnesota Rent
+  Assurance &amp; Deposit Protection Act — the way a bill should be shown
+  to the public: the full statutory text in {n_clauses} clauses, the plain
+  English beside it, the math behind it, and the record of every mark,
+  request, and change it has ever taken.</p>
+  <p>It is <b>living</b>, not a PDF. The draft updates as it is written,
+  every change lands on the <a href="/editions">Editions ledger</a>, and
+  every figure is marked <a href="/claims">verified or estimate</a>. Nothing
+  here is filed law — but nothing here is hidden either.</p>
+</section>
+
+<section>
+  <h2 id="how-it-works">How it works</h2>
+  <ol class="how-steps">
+    <li><b>Read it your way.</b> The draft at <a href="/bill">/bill</a>
+    carries statute text and plain language side by side, with audience
+    lenses for renters, housing providers, and lawmakers. Three screen
+    modes — <b>Desktop</b>, <b>TV / Present</b>, and <b>Mobile / Tablet</b> —
+    fit whatever screen you're on.</li>
+    <li><b>Mark the draft.</b> Any clause takes a mark — a question, a
+    comment, or a proposed edit with your own wording — through the
+    <a href="/mark">Inkwell</a>. Highlight text on a clause and the toolbar
+    offers to quote it directly.</li>
+    <li><b>Marks get read in by a person.</b> Nothing posts automatically.
+    Marks land in a dark <a href="/intake">intake queue</a>; a steward
+    reads each in (it gets its public M-number), holds it, or crisis-routes
+    it — someone in housing trouble is pointed at help, not published.</li>
+    <li><b>The ledger answers in the open.</b> Read-in marks live on the
+    <a href="/margin">Margin</a> — numbered, dated, attached to their
+    clause, answered by the drafting table, and replyable by reference
+    (<i>re: M-0001</i>). {n_marks} on the record so far.</li>
+    <li><b>Requests get worked, not lost.</b> Briefings, amendments,
+    positions, and asks go through the <a href="/requests">Requests
+    desk</a>: new → reviewing → scheduled → incorporated. {n_req} active.</li>
+    <li><b>The math is checkable.</b> The <a href="/calculator">funding
+    braid calculator</a> runs the live three-source model — deposit float,
+    M1PR advance, landlord match — against any rent, portfolio size, and
+    stress scenario.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Presented by Semptify</h2>
+  <p>Semptify builds housing-rights tools in the open — the bill, this
+  platform, and the guides and record tools at
+  <a href="https://semptify.org">semptify.org</a>. No advertising, no
+  tracking, no accounts here — the record is the interface.</p>
+</section>"""
+    return page("Home", body, ctx, [
+        ("Read the draft", "/bill", "primary"),
+        ("How it works", "#how-it-works" , "link"),
+        ("Funding braid", "/calculator", "link"),
+        ("semptify.org", "https://semptify.org", "link"),
+    ], "Front page", sublinks=[
+        ("Introduction", "#"), ("How it works", "#"), ("Semptify", "https://semptify.org"),
+    ])
+
+
+def desk(ctx: dict) -> bytes:
     meta = db.meta()
     ev = db.last_event()
     cur = db.journey_current()

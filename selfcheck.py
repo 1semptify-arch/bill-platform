@@ -107,9 +107,16 @@ def main() -> int:
     try:
         # ---- 1. Desk & core reads --------------------------------------
         st, html, _ = get("/")
-        check("GET / desk home (spine)", st == 200 and "Objective" in html
+        check("GET / index: introduction + how-it-works", st == 200
+              and "Introduction" in html and "How it works" in html)
+        check("index: living document badge + semptify link",
+              "Living document" in html and "semptify.org" in html
+              and "Presented by" in html)
+
+        st, html, _ = get("/desk")
+        check("GET /desk (spine)", st == 200 and "Objective" in html
               and "Where it stands" in html and "Next action" in html)
-        check("home shows pipeline + desk rail", "The pipeline" in html
+        check("desk shows pipeline + rail", "The pipeline" in html
               and "desk-rail" in html and "Working Draft" in html)
 
         st, html, _ = get("/bill")

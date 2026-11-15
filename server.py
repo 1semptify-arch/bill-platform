@@ -330,7 +330,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         route = {
-            "/": lambda: views.home(ctx),
+            "/": lambda: views.index(ctx),
+            "/desk": lambda: views.desk(ctx),
             "/bill": lambda: views.bill(lens, view_style, ctx),
             "/margin": lambda: views.margin(posted_flag, ctx),
             "/intake": lambda: views.intake(ctx),

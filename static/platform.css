@@ -244,6 +244,21 @@ a.next { font-weight: 700; color: var(--link); }
   color: var(--info-fg); border-radius: 4px;
 }
 
+/* ---------- index / front page ---------- */
+.index-hero { padding: 4px 0 6px; }
+.index-hero h1 { font-size: 2.2rem; max-width: 20em; }
+.live-badge { font-size: 0.9rem; color: var(--mut); margin: 14px 0 4px; }
+.live-badge .st { margin-right: 6px; }
+.hero-acts { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.hero-acts .btn { margin-top: 0; }
+.how-steps { list-style: none; padding: 0; margin: 0; counter-reset: how; }
+.how-steps li { padding: 12px 0 12px 2px; border-bottom: 1px solid var(--line); }
+.how-steps li::before {
+  counter-increment: how; content: counter(how, decimal-leading-zero);
+  font-family: var(--mono); color: var(--mut); margin-right: 12px; font-size: 0.8rem;
+}
+.foot-brand b, .foot-brand a { color: var(--ink); font-weight: 600; }
+
 /* ---------- marks / requests / notices ---------- */
 .mark, .req { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .mno { font-size: 0.82rem; color: var(--mut); margin: 0 0 6px; }
