@@ -190,10 +190,11 @@ def page(title: str, body: str, ctx: dict,
   </main>
 </div>
 <footer class="foot">
-  <p class="foot-brand"><img class="foot-logo" src="/static/logo.svg" alt=""><b>Presented by <a href="https://semptify.org">Semptify</a></b>
+  <p class="foot-brand"><img class="foot-logo" src="/static/logo.svg" alt=""><img class="foot-flag" src="/static/mn-flag.svg" alt="Minnesota state flag"><b>Presented by <a href="https://semptify.org">Semptify</a></b>
   — housing rights, written in public. A Semptify project.</p>
   <p>Working draft — nothing here is filed law. Marks land in intake and
-  are read into the ledger by a person, never automatically.</p>
+  are read into the ledger by a person, never automatically.
+  <a href="/help">Need help now?</a></p>
   <p class="foot-nav"><a href="/">Home</a> · <a href="/desk">Desk</a> ·
   <a href="/bill">The bill</a> · <a href="/calculator">Funding braid</a> ·
   <a href="/margin">The margin</a> · <a href="/intake">Intake</a> ·
@@ -202,6 +203,7 @@ def page(title: str, body: str, ctx: dict,
   <a href="/editions">Editions</a> · <a href="/changes">Changes</a> ·
   <a href="/search">Search</a> · <a href="/teach">Teach</a> ·
   <a href="/track">Track</a> · <a href="/campaign">Campaign</a> · <a href="/sign">Sign</a> · <a href="/tv">TV Present</a> ·
+  <a href="/help">Help</a> · <a href="/legal">Legal</a> ·
   <a href="https://semptify.org">semptify.org</a></p>
 </footer>
 {_mobile_bottom_nav(ctx)}
@@ -306,7 +308,8 @@ def _mark_form(cid: str | None, re_no: str | None,
       <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
   </div>
   <p class="crisis">If this is about your own housing right now —
-  <b>HOME Line 612-728-5767</b> first. This desk is for the draft.</p>
+  <b>HOME Line 612-728-5767</b> first · <a href="/help">more help lines</a>.
+  This desk is for the draft.</p>
   <button class="btn" type="submit">Enter the mark</button>
 </form>"""
 
@@ -322,7 +325,8 @@ def index(ctx: dict) -> bytes:
     n_req = db.open_request_count()
     body = f"""
 <section class="index-hero">
-  <p class="stage-kicker">Presented by <a href="https://semptify.org">Semptify</a> · {esc(meta['jurisdiction'])}</p>
+  <p class="stage-kicker"><img class="mn-flag" src="/static/mn-flag.svg"
+    alt="Minnesota state flag"> Presented by <a href="https://semptify.org">Semptify</a> · {esc(meta['jurisdiction'])}</p>
   <h1>{esc(meta['short_title'])}</h1>
   <p class="lede">{esc(meta['thesis'])}</p>
   <p class="live-badge">{_status('current')} <b>Living document</b> — last
@@ -1701,6 +1705,134 @@ carried to a hearing.</p></header>
         ("Campaign", "/campaign", "link"),
         ("The margin", "/margin", "link"),
     ], "Sign the bill")
+
+
+def help_page(ctx: dict) -> bytes:
+    """Public help directory — crisis lines and free public services.
+    Official channels only; no advertising, no endorsements. Numbers
+    verified against official listings as of Nov 2026 — re-verify on the
+    service's official site before relying on any line."""
+    body = """
+<header class="mast"><h1>Help lines</h1>
+<p class="lede">If the bill questions brought up something heavier — you're
+not alone, and these are free, public help lines. Every entry is an
+official public channel. Nothing here is an advertisement and nobody
+paid to be listed.</p></header>
+
+<section><h2>Right now</h2>
+<ul class="ev">
+  <li><b>Emergency — 911</b></li>
+  <li><b>Suicide &amp; Crisis Lifeline — call or text 988</b>
+  · 24/7, free, confidential. Veterans press 1.</li>
+  <li><b>Crisis Text Line — text HOME to 741741</b></li>
+  <li><b>Poison Control — 1-800-222-1222</b></li>
+</ul></section>
+
+<section><h2>Housing</h2>
+<ul class="ev">
+  <li><b>HOME Line — 612-728-5767</b> · free legal help for Minnesota
+  renters — deposits, evictions, repairs, notices.</li>
+  <li><b>United Way 211 — dial 2-1-1</b> · statewide referrals for
+  shelter, rent help, utilities, food.</li>
+  <li><b>Minnesota Food HelpLine — 1-888-711-1151</b> · food shelves and
+  SNAP help.</li>
+</ul></section>
+
+<section><h2>Mental health &amp; addiction</h2>
+<ul class="ev">
+  <li><b>SAMHSA National Helpline — 1-800-662-4357</b> · 24/7 free,
+  confidential treatment referral for substance use and mental health.</li>
+  <li><b>Alcoholics Anonymous</b> · local meetings — aa.org</li>
+  <li><b>Narcotics Anonymous</b> · local meetings — na.org</li>
+  <li><b>Al-Anon</b> · for family &amp; friends of drinkers — al-anon.org</li>
+  <li><b>Minnesota Problem Gambling Helpline — 1-800-333-4673</b>
+  (1-800-333-HOPE) · free, confidential, 24/7.</li>
+  <li><b>Gamblers Anonymous</b> · local meetings — gamblersanonymous.org</li>
+  <li><b>Debtors Anonymous</b> · local meetings — debtorsanonymous.org</li>
+</ul></section>
+
+<section><h2>Safety &amp; legal</h2>
+<ul class="ev">
+  <li><b>MN Day One Crisis Line — 1-866-223-1111</b> · domestic violence
+  help, statewide, 24/7.</li>
+  <li><b>National Domestic Violence Hotline — 1-800-799-7233</b></li>
+  <li><b>LawHelpMN.org</b> · free legal-aid directory for Minnesota.</li>
+</ul></section>
+
+<section><h2>A note</h2>
+<p>These are public services run by their own organizations — listing a
+line is information, not an endorsement, and Semptify receives nothing
+for it. Phone numbers change; the service's official site is the
+authority. This page is information only, not advice.</p>
+<p>If you came here about the bill itself, the desk is at
+<a href="/mark">/mark</a> — and your mark stays private until a steward
+reads it in.</p></section>"""
+    return page("Help lines", body, ctx, [
+        ("Mark the draft", "/mark", "primary"),
+        ("Home", "/", "link"),
+        ("Legal", "/legal", "link"),
+    ], "Help")
+
+
+def legal_page(ctx: dict) -> bytes:
+    body = """
+<header class="mast"><h1>Legal</h1>
+<p class="lede">The fine print, kept readable — privacy, terms, and
+license for this platform. The bill is a <b>working draft</b>: nothing
+here is filed law, and nothing here is legal advice.</p></header>
+
+<section id="privacy"><h2>Privacy</h2>
+<p><b>What we store.</b> Only what you choose to submit: the text of marks
+and requests, and — if you opt in — a name, contact, or email. Signing
+the <a href="/sign">signature book</a> stores what you typed; your name,
+org/town, and line publish only after a steward reads them in. Email and
+contact fields are never rendered publicly.</p>
+<p><b>Receipts.</b> Each submission returns a private code for status
+checks. It reveals status only — never your contact or full text.</p>
+<p><b>Cookies.</b> Two functional cookies, no tracking: <code>bp_mode</code>
+(your screen-mode choice) and <code>bp_steward</code> (steward session).
+No analytics, no ads, no third-party trackers — there is nothing to
+opt out of.</p>
+<p><b>Rate limiting.</b> Submission counts are kept per IP in memory only;
+nothing is written to the database about your IP.</p>
+<p><b>Where it lives.</b> Records sit in a database on the hosting service
+and replicate to project cloud storage for backup. Stewards can export
+the full record for safekeeping. To ask for a correction or removal,
+leave a steward note through <a href="/requests">Requests</a>.</p>
+</section>
+
+<section id="terms"><h2>Terms</h2>
+<ul class="ev">
+  <li>This platform presents a <b>draft bill</b> for public reading,
+  comment, and campaign coordination. It is not enacted law and confers
+  no rights or obligations.</li>
+  <li>Submissions are reviewed by people before anything publishes. The
+  stewards may hold, decline, or retract material — the record of that
+  decision stays visible.</li>
+  <li>Don't submit other people's personal information. Yours is your
+  choice; theirs is not.</li>
+  <li>No abusive, deceptive, or commercial content. This space carries
+  no advertising and promotes no product or service.</li>
+  <li>Nothing here is legal advice. If you have a live housing problem,
+  the <a href="/help">help lines</a> are the right door.</li>
+</ul></section>
+
+<section id="license"><h2>License</h2>
+<p><b>Content.</b> The bill text, plain-language explanations, and page
+content are dedicated to the <b>public domain (CC0 1.0)</b> — take them,
+use them, carry them. A bill belongs to the public.</p>
+<p><b>Code.</b> The platform source is released under the
+<b>MIT License</b>.</p>
+<p><b>Marks and signatures.</b> By submitting, you agree your words (and
+for signatures, the name you consent to publish) may be read into the
+public record. Retraction stays on the record rather than erasing it —
+that's what makes the ledger honest.</p>
+</section>"""
+    return page("Legal", body, ctx, [
+        ("Help lines", "/help", "primary"),
+        ("Sign the bill", "/sign", "link"),
+        ("Home", "/", "link"),
+    ], "Legal")
 
 
 def packet(ctx: dict) -> bytes:

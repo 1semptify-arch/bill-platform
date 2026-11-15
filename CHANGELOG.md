@@ -105,3 +105,16 @@ consent checkbox is required, and the optional email never publishes —
 that field is the seam where OAuth storage plugs in later. Stewards get
 an "Awaiting publish" queue on the page with Publish/Hold. Wired into
 nav, footer, search, receipts, export, and the campaign's do-one-thing.
+
+### Help lines, legal pages, and the Minnesota flag
+`/help` is a public help directory — 911, 988, Crisis Text Line, HOME
+Line, 211, SAMHSA, AA/NA/Al-Anon, the MN gambling helpline, Gamblers
+Anonymous, Debtors Anonymous, Day One, LawHelpMN. Official public
+channels only; no advertising, no endorsements, nobody paid to be
+listed. `/legal` carries the privacy policy (what's stored, receipts,
+the two functional cookies, in-memory rate limiting, R2 backups),
+terms (draft not law, steward review, no PII-of-others, no ads, not
+legal advice), and the license (content CC0 public domain, code MIT).
+The 2024 Minnesota flag sits in the index hero kicker and the footer
+next to the Semptify lockup. Footer links to Help and Legal sitewide;
+the mark form's crisis line now links to the help page.

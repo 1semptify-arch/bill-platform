@@ -316,6 +316,8 @@ a.next { font-weight: 700; color: var(--link); }
 .crisis { font-size: 0.84rem; color: var(--mut); margin-top: 16px; }
 .stack label.consent { display: flex; gap: 10px; align-items: flex-start; }
 .stack label.consent input { width: auto; margin-top: 3px; }
+.mn-flag { height: 20px; width: auto; border-radius: 2px; vertical-align: -4px; margin-right: 6px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+.foot-flag { height: 20px; width: auto; border-radius: 2px; vertical-align: -4px; margin: 0 8px 0 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
 .btn {
   margin-top: 14px; padding: 9px 18px; font: inherit; font-size: 0.88rem; font-weight: 600;
   background: var(--ink); color: #fff; border: 0; border-radius: 5px; cursor: pointer;

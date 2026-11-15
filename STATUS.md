@@ -83,6 +83,9 @@ Plan: actuarial verify → coalition → testimony via margin → file Jan
   or be dropped (public-side PII rule). The signature book's optional
   `email` field is the designated OAuth-storage seam — name/org/note
   are consented-publish fields and stay in the ledger.
+- `/help` — public help directory (crisis + official public channels only, no ads)
+- `/legal` — privacy / terms / license (CC0 content, MIT code)
+- MN flag (2024) in index hero + footer
 - Signature book live at `/sign` — voluntary endorsement list; signs
   land `queued` (dark) with a private receipt; steward publishes →
   S-number; only name/org/town/note render publicly. Consent checkbox

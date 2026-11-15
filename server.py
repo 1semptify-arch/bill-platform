@@ -375,6 +375,8 @@ class Handler(BaseHTTPRequestHandler):
             "/teach": lambda: views.teach_page(ctx),
             "/campaign": lambda: views.campaign(ctx),
             "/sign": lambda: views.sign_page(ctx),
+            "/help": lambda: views.help_page(ctx),
+            "/legal": lambda: views.legal_page(ctx),
             "/packet": lambda: views.packet(ctx),
             "/mark": lambda: views.mark_form_page(
                 clause_id, q.get("re", [None])[0],

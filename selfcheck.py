@@ -465,6 +465,24 @@ def main() -> int:
         check("receipt shows published signature", st == 200
               and "S-0001" in html)
 
+        # help + legal pages and the MN flag
+        st, html, _ = get("/help")
+        check("help page lists crisis + public help lines", st == 200
+              and "988" in html and "612-728-5767" in html
+              and "1-800-333-4673" in html and "aa.org" in html
+              and "debtorsanonymous.org" in html)
+        st, html, _ = get("/legal")
+        check("legal page covers privacy + terms + license", st == 200
+              and "Privacy" in html and "Terms" in html
+              and "CC0" in html and "MIT License" in html
+              and "bp_mode" in html)
+        st, html, _ = get("/")
+        check("MN flag on hero + footer links", st == 200
+              and "mn-flag.svg" in html and "/help" in html
+              and "/legal" in html)
+        st, flag, _ = get("/static/mn-flag.svg")
+        check("MN flag asset serves", st == 200 and "<svg" in flag)
+
         # rate limit: flood /api/mark — 12th+ within 5 min must 429
         flood = [post("/api/mark", {"body": f"flood {i}"})[0]
                  for i in range(14)]
