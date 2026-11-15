@@ -352,6 +352,72 @@ def main() -> int:
         st, html, _ = get("/positions")
         check("position recorded", "Rep. Example" in html and "watching" in html)
 
+        # ---- 6. v1.1 coverage: permalinks, retract, receipts, search,
+        #    shareable calculator, honeypot+rate, meta, export, teach ----
+        st, html, _ = get("/margin")
+        check("margin marks have permalink anchors + links",
+              'id="M-0005"' in html and 'href="/margin#M-0005"' in html)
+
+        # receipt -> /track round trip
+        st, hdrs = post("/api/mark", {"clause_id": "I-1",
+                        "body": "receipt test mark"})
+        loc = hdrs.get("Location", "")
+        check("mark POST redirects to /track with receipt code",
+              st == 303 and loc.startswith("/track?code="))
+        code = urllib.parse.parse_qs(
+            urllib.parse.urlparse(loc).query)["code"][0]
+        st, html, _ = get(loc)
+        check("track page shows private receipt + intake status",
+              st == 200 and code in html and "dark intake" in html)
+        check("track exposes status only, not contact/body",
+              "receipt test mark" not in html)
+
+        # steward retract keeps the record visible, struck through
+        mid2 = newest_queued_mark_id()
+        post("/api/mark_action", {"id": mid2, "action": "read_in"},
+             cookie=steward_cookie)
+        st, _ = post("/api/mark_action", {
+            "id": mid2, "action": "retract",
+            "response": "withdrawn at submitter's request"},
+            cookie=steward_cookie)
+        st, html, _ = get("/margin")
+        check("retracted mark stays visible, struck through",
+              st == 303 or "retracted" in html)
+
+        st, html, _ = get("/search?q=subrogation")
+        check("search finds clause + margin + change hits", st == 200
+              and "I-4" in html and "result(s)" in html)
+
+        st, html, _ = get("/calculator?rent=2000&units=48&m1pr=0")
+        check("calculator honors shareable URL params", st == 200
+              and 'value="2000"' in html and 'value="48"' in html)
+
+        st, html, _ = get("/")
+        check("og/description meta + skip link present", st == 200
+              and 'property="og:title"' in html and 'class="skip"' in html)
+
+        st, html, _ = get("/teach")
+        check("teach page renders guided stops with prompts", st == 200
+              and "Talk about" in html and "Stop 01" in html)
+
+        st, html, _ = get("/present?s=4&notes=1", cookie="bp_mode=tv")
+        check("speaker notes render with ?notes=1", st == 200
+              and "speaker-notes" in html and "slider" in html)
+
+        st, _ = post("/api/mark", {"body": "bot spam", "website": "x"})
+        check("honeypot silently drops bot submissions", st == 303
+              and db.marks(status="queued")[-1]["body"] != "bot spam")
+
+        st, _ = get_raw("/api/export")
+        check("/api/export locked without steward", st == 403)
+        st, hdrs = get_raw("/api/export", cookie=steward_cookie)
+        check("/api/export serves full backup to steward", st == 200)
+
+        # rate limit: flood /api/mark — 12th+ within 5 min must 429
+        flood = [post("/api/mark", {"body": f"flood {i}"})[0]
+                 for i in range(14)]
+        check("rate limit returns 429 after burst", 429 in flood)
+
         st, css, _ = get("/static/platform.css")
         check("static css", st == 200 and "stage-slide" in css and "mobile-bar" in css)
         st, js, _ = get("/static/platform.js")

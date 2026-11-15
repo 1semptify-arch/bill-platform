@@ -45,6 +45,7 @@ import json
 import mimetypes
 import os
 import sys
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -142,6 +143,19 @@ class Handler(BaseHTTPRequestHandler):
                 out[k.strip()] = v.strip()
         return out
 
+    _RATE: dict[str, list[float]] = {}
+
+    def _rate_ok(self, limit: int = 12, window: float = 300.0) -> bool:
+        ip = self.client_address[0]
+        now = time.time()
+        hits = [t for t in self._RATE.get(ip, []) if now - t < window]
+        if len(hits) >= limit:
+            self._RATE[ip] = hits
+            return False
+        hits.append(now)
+        self._RATE[ip] = hits
+        return True
+
     def _mode(self) -> str:
         m = self._cookies().get("bp_mode", "auto")
         return m if m in MODES + ("auto",) else "auto"
@@ -191,6 +205,15 @@ class Handler(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(url.query)
         ctx = self._ctx(path)
 
+        if path == "/api/export":
+            if not self._is_steward():
+                self._send(b"steward unlock required for export", 403,
+                           "text/plain; charset=utf-8")
+                return
+            self._send(json.dumps(db.export_state(), default=str).encode("utf-8"),
+                       ctype="application/json; charset=utf-8")
+            return
+
         if path == "/api/state":
             steward = ctx["steward"]
             raw_marks = db.marks() if steward else db.marks(status="read_in")
@@ -198,11 +221,13 @@ class Handler(BaseHTTPRequestHandler):
             for r in raw_marks:
                 d = dict(r)
                 d.pop("contact", None)
+                d.pop("receipt", None)
                 safe_marks.append(d)
             safe_reqs = []
             for r in db.requests():
                 d = dict(r)
                 d.pop("contact_info", None)
+                d.pop("receipt", None)
                 safe_reqs.append(d)
             snap = {
                 "clauses": [dict(r) for r in db.clauses()],
@@ -214,6 +239,7 @@ class Handler(BaseHTTPRequestHandler):
                 "decisions": [dict(r) for r in db.decisions()],
                 "journey": [dict(r) for r in db.journey()],
                 "editions": [dict(r) for r in db.editions()],
+                "changes": [dict(r) for r in db.changes()],
                 "steward": steward,
                 "default_braid": db.calculate_braid(1300.0, 1, True),
             }
@@ -320,7 +346,8 @@ class Handler(BaseHTTPRequestHandler):
                 rent = float(q.get("rent", ["1300"])[0])
             except ValueError:
                 rent = 1300.0
-            self._send(views.present(slide, clause_id, rent, ctx))
+            self._send(views.present(slide, clause_id, rent, ctx,
+                                     q.get("notes", ["0"])[0] == "1"))
             return
 
         if path == "/steward":
@@ -342,6 +369,10 @@ class Handler(BaseHTTPRequestHandler):
             "/editions": lambda: views.editions(ctx),
             "/changes": lambda: views.changes_page(
                 q.get("s", [None])[0], ctx),
+            "/search": lambda: views.search_page(q.get("q", [""])[0], ctx),
+            "/track": lambda: views.track_page(q.get("code", [""])[0],
+                                               q.get("new", [""])[0], ctx),
+            "/teach": lambda: views.teach_page(ctx),
             "/mark": lambda: views.mark_form_page(
                 clause_id, q.get("re", [None])[0],
                 q.get("q", [None])[0], q.get("kind", [None])[0], ctx),
@@ -384,20 +415,29 @@ class Handler(BaseHTTPRequestHandler):
                 )
             return
 
+        if path in ("/api/mark", "/api/request"):
+            if form.get("website"):  # honeypot — only bots fill it
+                self._redirect("/margin")
+                return
+            if not self._rate_ok():
+                self._send(b"too many submissions - try again in a few minutes",
+                           429, "text/plain; charset=utf-8")
+                return
+
         if path == "/api/mark":
             body = self._one(form, "body")
             if not body:
                 self._send(b"a mark with no mark is nothing", 422,
                            "text/plain; charset=utf-8")
                 return
-            db.add_mark(self._one(form, "clause_id", 40) or None,
-                        self._one(form, "kind", 20), body,
-                        self._one(form, "name", 200),
-                        self._one(form, "contact", 200),
-                        self._one(form, "reply_to", 20) or None,
-                        self._one(form, "quote", 400) or None,
-                        self._one(form, "proposed") or None)
-            self._redirect("/margin?posted=1")
+            rc = db.add_mark(self._one(form, "clause_id", 40) or None,
+                             self._one(form, "kind", 20), body,
+                             self._one(form, "name", 200),
+                             self._one(form, "contact", 200),
+                             self._one(form, "reply_to", 20) or None,
+                             self._one(form, "quote", 400) or None,
+                             self._one(form, "proposed") or None)
+            self._redirect(f"/track?code={rc}&new=mark")
             return
 
         if path == "/api/mark_action":
@@ -409,6 +449,10 @@ class Handler(BaseHTTPRequestHandler):
                 mid = int(self._one(form, "id", 20))
             except ValueError:
                 mid = 0
+            if self._one(form, "action", 20) == "retract":
+                db.mark_retract(mid, self._one(form, "response", 500) or None)
+                self._redirect("/margin")
+                return
             db.mark_action(mid, self._one(form, "action", 20),
                            self._one(form, "response"),
                            self._one(form, "responder", 80) or None)
@@ -421,12 +465,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(b"a request needs a summary", 422,
                            "text/plain; charset=utf-8")
                 return
-            db.add_request(self._one(form, "req_type", 20), summary,
-                           self._one(form, "details"),
-                           self._one(form, "clause_id", 40) or None,
-                           self._one(form, "org_or_role", 300),
-                           self._one(form, "contact", 300))
-            self._redirect("/requests?submitted=1")
+            rc = db.add_request(self._one(form, "req_type", 20), summary,
+                                self._one(form, "details"),
+                                self._one(form, "clause_id", 40) or None,
+                                self._one(form, "org_or_role", 300),
+                                self._one(form, "contact", 300))
+            self._redirect(f"/track?code={rc}&new=request")
             return
 
         if path == "/api/request_status":

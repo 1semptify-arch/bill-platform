@@ -119,18 +119,29 @@
     }
   }
 
+  function syncBraidUrl() {
+    try {
+      if (!rentInput || !window.history || !history.replaceState) return;
+      var p = new URLSearchParams();
+      p.set("rent", rentInput.value);
+      if (unitsInput) p.set("units", unitsInput.value);
+      if (m1prInput && !m1prInput.checked) p.set("m1pr", "0");
+      history.replaceState(null, "", location.pathname + "?" + p.toString());
+    } catch (e) {}
+  }
+
   if (rentRange && rentInput) {
     rentRange.addEventListener("input", function () {
       rentInput.value = rentRange.value;
-      recomputeBraid();
+      recomputeBraid(); syncBraidUrl();
     });
     rentInput.addEventListener("input", function () {
       rentRange.value = rentInput.value;
-      recomputeBraid();
+      recomputeBraid(); syncBraidUrl();
     });
   }
-  if (unitsInput) unitsInput.addEventListener("input", recomputeBraid);
-  if (m1prInput) m1prInput.addEventListener("change", recomputeBraid);
+  if (unitsInput) unitsInput.addEventListener("input", function () { recomputeBraid(); syncBraidUrl(); });
+  if (m1prInput) m1prInput.addEventListener("change", function () { recomputeBraid(); syncBraidUrl(); });
 
   /* 4. TV / Presentation keyboard & remote D-pad controls */
   if (document.body.classList.contains("mode-tv") || document.body.classList.contains("is-stage")) {

@@ -92,6 +92,9 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
         ("/margin", "Public Margin"),
         ("/requests", f"Requests ({n_req})"),
         ("/changes", "Changes"),
+        ("/search", "Search"),
+        ("/teach", "Teach"),
+        ("/track", "Track"),
         ("/positions", "Positions"),
         ("/claims", "Claims Ledger"),
         ("/decisions", "Locked Decisions"),
@@ -156,10 +159,16 @@ def page(title: str, body: str, ctx: dict,
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)} — {BRAND}</title>
+<meta name="description" content="{esc(SUB)} — a working draft presented in the open: statute text, plain language, the funding math, and the public record of every mark and change.">
+<meta property="og:title" content="{esc(title)} — {BRAND}">
+<meta property="og:description" content="{esc(SUB)} — working draft, public ledger, living document.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/static/logo-512.png">
 <link rel="icon" type="image/png" href="/static/favicon.png">
 <link rel="stylesheet" href="/static/platform.css">
 </head>
 <body class="mode-{'desk' if mode == 'auto' else esc(mode)}{stage_cls}"{' data-mode-auto="1"' if mode == 'auto' else ''} data-steward="{'1' if ctx['steward'] else '0'}">
+<a class="skip" href="#main-content">Skip to content</a>
 <div class="viewport-shell">
 <header class="topbar">
   <a class="brand" href="/"><img class="brand-logo" src="/static/logo.svg" alt=""><span>{BRAND}<small>{esc(SUB)}</small></span></a>
@@ -186,7 +195,8 @@ def page(title: str, body: str, ctx: dict,
   <a href="/requests">Requests</a> · <a href="/positions">Positions</a> ·
   <a href="/claims">Claims</a> · <a href="/decisions">Decisions</a> ·
   <a href="/editions">Editions</a> · <a href="/changes">Changes</a> ·
-  <a href="/tv">TV Present</a> ·
+  <a href="/search">Search</a> · <a href="/teach">Teach</a> ·
+  <a href="/track">Track</a> · <a href="/tv">TV Present</a> ·
   <a href="https://semptify.org">semptify.org</a></p>
 </footer>
 {_mobile_bottom_nav(ctx)}
@@ -211,7 +221,7 @@ def _reline(m) -> str:
     return f' · re: <a href="/margin#{esc(m["reply_to"])}">{esc(m["reply_to"])}</a>' if m["reply_to"] else ""
 
 
-def _mark_html(m, show_answer_link: bool = True) -> str:
+def _mark_html(m, show_answer_link: bool = True, steward: bool = False) -> str:
     quote = (f'<blockquote class="quote">“{esc(m["quote_text"])}”</blockquote>'
              if m["quote_text"] else "")
     proposed = (f'<p class="proposed"><b>Proposed wording:</b> '
@@ -225,12 +235,30 @@ def _mark_html(m, show_answer_link: bool = True) -> str:
               f'answer by reference</a></p>' if show_answer_link else "")
     kind = KIND_WORDS.get(m["kind"], "comment")
     author = f' · {esc(m["author_label"])}' if m["author_label"] else " · unsigned"
-    return (f'<article class="mark" id="{esc(m["public_no"] or m["id"])}">'
-            f'<p class="mno"><b>{esc(m["public_no"] or "#" + str(m["id"]))}</b>'
+    no = m["public_no"] or "#" + str(m["id"])
+    plink = (f' <a class="plink" href="/margin#{esc(m["public_no"])}" '
+             f'title="Link to this mark">#</a>' if m["public_no"] else "")
+    if m["retracted_at"]:
+        retract = (f'{_status("retracted")} <span class="quiet">'
+                   f'{esc(m["retracted_at"])}'
+                   f'{(" — " + esc(m["retract_note"])) if m["retract_note"] else ""}</span>')
+        return (f'<article class="mark retracted" id="{esc(no)}">'
+                f'<p class="mno"><b>{esc(no)}</b>{plink} {retract}</p>'
+                f'<p><del>{esc(m["body"])}</del></p></article>')
+    retract_form = ""
+    if steward and m["public_no"]:
+        retract_form = f'''
+  <form method="post" action="/api/mark_action" class="stack mact">
+    <input type="hidden" name="id" value="{m["id"]}">
+    <input name="response" placeholder="Retraction note" maxlength="500">
+    <button name="action" value="retract" class="ghost">Retract</button>
+  </form>'''
+    return (f'<article class="mark" id="{esc(no)}">'
+            f'<p class="mno"><b>{esc(no)}</b>{plink}'
             f' · {esc(m["read_in_at"] or m["created_at"])} · {kind} · '
             f'{_clause_label(m["clause_id"])}{author}{_reline(m)}</p>'
             f'{quote}{proposed}<p>{esc(m["body"])}</p>{response}{answer}'
-            f'</article>')
+            f'{retract_form}</article>')
 
 
 def _mark_form(cid: str | None, re_no: str | None,
@@ -270,6 +298,7 @@ def _mark_form(cid: str | None, re_no: str | None,
       <input name="name" autocomplete="name" placeholder="e.g. St. Paul Renter, Rural Provider"></label>
     <label>Contact <span class="quiet">(optional — never shown publicly)</span>
       <input name="contact" autocomplete="off"></label>
+      <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
   </div>
   <p class="crisis">If this is about your own housing right now —
   <b>HOME Line 612-728-5767</b> first. This desk is for the draft.</p>
@@ -718,7 +747,20 @@ def calculator(rent: float, units: int, m1pr: bool, ctx: dict) -> bytes:
     return page("Funding Braid Calculator", body, ctx, actions, "Calculator presets")
 
 
-def present(slide: int, clause_id: str | None, rent: float, ctx: dict) -> bytes:
+PRESENT_NOTES = {
+    1: "Open with the single-sentence ask, then the two honesty badges: every figure is labeled verified or estimate, and nothing here is filed law yet.",
+    2: "Anchor the problem in their numbers: filings and provider loss are verified; surety-debt framing is what the bill replaces.",
+    3: "Title I is the self-funding core — deposits never touch the landlord, adjudication is neutral, and the 1% tenant floor is preserved.",
+    4: "Drive the slider live. Base case $15.33/mo at $1,300 rent ≈ 1.18%; ask the room what number breaks it, then show fraud and recession legs.",
+    5: "Title II is the assurance engine — hardship triggers are UI-standard verified events, coverage is bounded 2–6 months.",
+    6: "Titles III–IV: belongings coverage plus governance — home agency, public registry, symmetric penalties, scheduled review.",
+    7: "Q&A slide — pull up any clause code (P-1 … IV-5) and read the statute + plain text straight off the record.",
+    8: "Close on the record, not the pitch: marks, requests, positions, and the change ledger are all public — that's the accountability story.",
+}
+
+
+def present(slide: int, clause_id: str | None, rent: float, ctx: dict,
+            notes: bool = False) -> bytes:
     """Dedicated 8-slide 16:9 TV / Presentation briefing deck."""
     total_slides = 8
     s = max(1, min(total_slides, slide))
@@ -877,17 +919,20 @@ def present(slide: int, clause_id: str | None, rent: float, ctx: dict) -> bytes:
     body = f"""
 <article class="stage-slide" data-slide="{s}" data-total="{total_slides}">
   {stage_body}
+  {f'<p class="speaker-notes"><b>Notes:</b> {esc(PRESENT_NOTES.get(s, ""))}</p>' if notes and PRESENT_NOTES.get(s) else ""}
   <nav class="stage-foot pnav" aria-label="Slide controls">
-    <a class="pnav-btn" id="prevSlide" href="/present?s={prev_s}">{'← Previous' if s > 1 else 'Start'}</a>
+    <a class="pnav-btn" id="prevSlide" href="/present?s={prev_s}{"&notes=1" if notes else ""}">{'← Previous' if s > 1 else 'Start'}</a>
     <span class="quiet">Use ← / → arrow keys, 1–8, F for fullscreen, or Esc for Desk</span>
-    <a class="pnav-btn" id="nextSlide" href="/present?s={next_s}">{'Next slide →' if s < total_slides else 'Done'}</a>
+    <a class="pnav-btn" id="nextSlide" href="/present?s={next_s}{"&notes=1" if notes else ""}">{'Next slide →' if s < total_slides else 'Done'}</a>
   </nav>
 </article>"""
 
     actions = [
         ("← Prev", f"/present?s={prev_s}", "link"),
         *dots,
-        ("Next →", f"/present?s={next_s}", "primary"),
+        ("Next →", f"/present?s={next_s}{'&notes=1' if notes else ''}", "primary"),
+        ("Notes off" if notes else "Speaker notes",
+         f"/present?s={s}{'' if notes else '&notes=1'}", "link"),
         ("Exit to Desk", "/mode/desk?next=/", "link"),
     ]
     ctx_tv = dict(ctx)
@@ -919,7 +964,7 @@ def margin(posted: bool, ctx: dict) -> bytes:
         'and assigns its M-number.</div>'
         if posted else ""
     )
-    items = "".join(_mark_html(m) for m in rows) or (
+    items = "".join(_mark_html(m, steward=ctx["steward"]) for m in rows) or (
         '<p class="quiet">The ledger is empty. Marks enter through the '
         'Inkwell and are read in from the intake queue.</p>')
     n = db.queue_count()
@@ -1105,6 +1150,7 @@ incorporated</b>. Contact info stays private to stewards.</p>
       placeholder="Optional — background, source citation, or timing window."></textarea></label>
     <label>Contact <span class="quiet">(steward-only — never rendered on the site)</span>
       <input name="contact" autocomplete="off" placeholder="Email or phone for scheduling"></label>
+      <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
     <button class="btn" type="submit">Submit request</button>
   </form>
 </section>
@@ -1204,11 +1250,20 @@ locked in public so any change must happen openly on the record.</p></header>
 
 def editions(ctx: dict) -> bytes:
     rows = db.editions()
+    def _linked(e):
+        chs = db.changes(edition=e["edition"])
+        if not chs:
+            return ""
+        lis = "".join(
+            f'<li><a href="/changes"><b>{esc(c["public_no"])}</b></a> '
+            f'{_status(c["status"])} — {esc(c["proposed_text"] or c["note"] or "")}</li>'
+            for c in chs)
+        return f'<ul class="ev">{lis}</ul>'
     items = "".join(
         f'<article class="mark"><p class="mno"><b>{esc(e["edition"])}</b> · '
         f'{esc(e["date"])} · '
         f'{_clause_label(e["clause"]) if e["clause"] != "—" else "—"}</p>'
-        f"<p>{esc(e['change'])}</p></article>" for e in reversed(rows))
+        f"<p>{esc(e['change'])}</p>{_linked(e)}</article>" for e in reversed(rows))
     body = f"""
 <header class="mast"><h1>Editions</h1>
 <p class="lede">The dated change ledger (E-01 through E-09), newest first.</p></header>
@@ -1305,6 +1360,144 @@ only resolved. <b>Newest activity first.</b></p></header>
         ("Editions", "/editions", "link"),
         ("Requests", "/requests", "link"),
     ], "Change ledger tools")
+
+
+def search_page(term: str, ctx: dict) -> bytes:
+    term = (term or "").strip()
+    out = ""
+    total = 0
+    if term:
+        res = db.search(term)
+        total = sum(len(v) for v in res.values())
+        groups = (
+            ("Clauses", res["clauses"], lambda r:
+             f'<a href="/clause/{esc(r["id"])}"><b>{esc(r["id"])}</b> — {esc(r["heading"])}</a> {_status(r["status"])}'),
+            ("Margin", res["marks"], lambda r:
+             f'<a href="/margin#{esc(r["public_no"])}"><b>{esc(r["public_no"])}</b></a> '
+             f'{_clause_label(r["clause_id"])} — {esc((r["body"] or "")[:140])}'),
+            ("Changes", res["changes"], lambda r:
+             f'<a href="/changes"><b>{esc(r["public_no"])}</b></a> {_status(r["status"])} '
+             f'{_clause_label(r["clause_id"])} — {esc((r["proposed_text"] or "")[:140])}'),
+            ("Requests", res["requests"], lambda r:
+             f'<a href="/requests"><b>{esc(r["public_no"])}</b></a> {_status(r["status"])} '
+             f'— {esc(r["summary"][:140])}'),
+            ("Editions", res["editions"], lambda r:
+             f'<a href="/editions"><b>{esc(r["edition"])}</b></a> {esc(r["date"])} '
+             f'— {esc(r["change"][:140])}'),
+            ("Decisions", res["decisions"], lambda r:
+             f'<a href="/decisions"><b>D-{r["num"]:02d}</b></a> — {esc(r["title"])}'),
+        )
+        for name, rows, render in groups:
+            if rows:
+                lis = "".join(f"<li>{render(r)}</li>" for r in rows)
+                out += f'<section><h2>{name} ({len(rows)})</h2><ul class="ev">{lis}</ul></section>'
+        if not total:
+            out = '<p class="quiet">Nothing on the record matches that.</p>'
+    body = f"""
+<header class="mast"><h1>Search the record</h1>
+<p class="lede">Clauses, margin marks, changes, requests, editions, and
+locked decisions — one query.</p></header>
+<form method="get" action="/search" class="stack">
+  <input type="search" name="q" value="{esc(term)}" autofocus
+         placeholder="Search the whole platform…" aria-label="Search">
+  <div class="row"><button>Search</button></div>
+</form>
+{f'<p class="quiet">{total} result(s) for “{esc(term)}”.</p>' if term else ""}
+{out}"""
+    return page("Search", body, ctx, [
+        ("The draft", "/bill", "primary"),
+        ("The margin", "/margin", "link"),
+        ("Changes", "/changes", "link"),
+    ], "Search")
+
+
+def track_page(code: str, new: str, ctx: dict) -> bytes:
+    rec = db.by_receipt(code)
+    banner = ""
+    if new and code:
+        banner = (f'<div class="notice-ok" role="status"><b>Received into intake.</b> '
+                  f'Your private receipt code is <b class="rc">{esc(code)}</b> — '
+                  f'save it. It is the only way to check your {"mark" if new == "mark" else "request"}\'s '
+                  f'status; it is never shown publicly.</div>')
+    found = ""
+    if code and rec:
+        if rec["type"] == "mark":
+            state = ("retracted" if rec["retracted_at"] else rec["status"])
+            pub = (f' — public as <b>{esc(rec["public_no"])}</b> on the '
+                   f'<a href="/margin#{esc(rec["public_no"])}">Margin</a>'
+                   if rec["public_no"] else " — still in dark intake")
+            found = (f'<article class="mark"><p class="mno"><b>Mark</b> '
+                     f'{_status(state)}{_clause_label(rec["clause_id"]) if rec["clause_id"] else ""}</p>'
+                     f'<p>{pub} · submitted {esc(rec["created_at"])}</p></article>')
+        else:
+            found = (f'<article class="mark"><p class="mno"><b>Request</b> '
+                     f'{_status(rec["status"])} · <b>{esc(rec["public_no"])}</b></p>'
+                     f'<p>Type: {esc(rec["req_type"])} · updated {esc(rec["updated_at"])}</p></article>')
+    elif code:
+        found = '<p class="quiet">No record under that code.</p>'
+    body = f"""
+<header class="mast"><h1>Track a submission</h1>
+<p class="lede">Marks and requests give you a private receipt code at
+submission. Enter it to see the status — nothing else is exposed.</p></header>
+{banner}
+<form method="get" action="/track" class="stack">
+  <input name="code" value="{esc(code)}" placeholder="Receipt code"
+         aria-label="Receipt code">
+  <div class="row"><button>Check status</button></div>
+</form>
+{found}"""
+    return page("Track", body, ctx, [
+        ("Mark the draft", "/mark", "primary"),
+        ("Requests", "/requests", "link"),
+        ("The margin", "/margin", "link"),
+    ], "Track a submission")
+
+
+TEACH_STOPS = [
+    ("Why this bill exists", "P-1", "Open question: who holds your deposit today — and who decides when there's a fight?"),
+    ("The words of the bill", "D-1", "Why does coverage attach to the lease, not a city license?"),
+    ("Where the deposit goes", "I-1", "What actually changes at lease signing?"),
+    ("Who decides disputes", "I-2", "Why can't the landlord — or the insurer — decide claims?"),
+    ("When you're the one owed", "I-3", "What does a free counter-claim lane change for renters?"),
+    ("A paid claim is final", "I-4", "Why does no-subrogation matter more than the payout?"),
+    ("Rewards for clean years", "I-5", "Who earns the dividend, and where does the surplus come from?"),
+    ("Checking the record", "I-6", "What could you look up about a building before you sign?"),
+    ("Emergency rent coverage", "II-1", "Which hardships trigger the fund — and which don't?"),
+    ("No debt cliff", "II-2", "What happens to a family the month after coverage ends?"),
+    ("Who pays what", "II-3", "Trace the three funding legs — then test your own rent on the calculator."),
+    ("Your belongings", "III-1", "What does belongings coverage add beyond the deposit?"),
+    ("Who runs it", "IV-1", "Why a home agency instead of bolting it onto an existing one?"),
+    ("Staying honest", "IV-5", "How does the public registry keep the system accountable?"),
+]
+
+
+def teach_page(ctx: dict) -> bytes:
+    stops = []
+    for i, (title, cid, prompt) in enumerate(TEACH_STOPS, 1):
+        c = db.clause(cid)
+        if not c:
+            continue
+        stops.append(f"""
+<article class="mark teach-stop">
+  <p class="mno"><b>Stop {i:02d}</b> · {_clause_label(cid)}</p>
+  <h3><a href="/clause/{esc(cid)}">{esc(title)}</a></h3>
+  <p class="plain"><b>Plain language:</b> {esc(c["plain_text"] or "")}</p>
+  <p class="teach-prompt"><b>Talk about:</b> {esc(prompt)}</p>
+</article>""")
+    body = f"""
+<header class="mast"><h1>Teach the bill</h1>
+<p class="lede">A guided path through the draft for classrooms, tenant
+meetings, and kitchen-table briefings — {len(stops)} stops, plain language
+first, each with a discussion prompt. Pair with the
+<a href="/tv">TV briefing deck</a> or have students follow along in
+<a href="/bill?view=plain&lens=renter">plain-language view</a>.</p></header>
+{"".join(stops)}"""
+    return page("Teach", body, ctx, [
+        ("Student view (plain)", "/bill?view=plain&lens=renter", "primary"),
+        ("TV briefing deck", "/tv", "link"),
+        ("Calculator", "/calculator", "link"),
+        ("The margin", "/margin", "link"),
+    ], "Teacher / student tools")
 
 
 def not_found(ctx: dict) -> bytes:

@@ -21,6 +21,7 @@ Python 3.11, stdlib only.
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -104,7 +105,10 @@ CREATE TABLE IF NOT EXISTS marks (
     responder_role TEXT,
     source         TEXT NOT NULL DEFAULT 'platform',
     created_at     TEXT NOT NULL,
-    read_in_at     TEXT
+    read_in_at     TEXT,
+    receipt        TEXT,                   -- submitter's status-lookup code
+    retracted_at   TEXT,                   -- public correction, never deleted
+    retract_note   TEXT
 );
 CREATE TABLE IF NOT EXISTS requests (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,6 +125,7 @@ CREATE TABLE IF NOT EXISTS requests (
                                    'incorporated','declined')),
     steward_note TEXT,
     is_public    INTEGER NOT NULL DEFAULT 1,
+    receipt      TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 );
@@ -263,6 +268,16 @@ def _seed(con: sqlite3.Connection) -> None:
 def init(path: Path | None = None) -> None:
     with connect(path) as con:
         con.executescript(SCHEMA)
+        # Migrate older DBs forward — CHECK constraints can't be altered,
+        # so retract uses a timestamp column, not a status value.
+        for table, cols in {"marks": ["receipt TEXT", "retracted_at TEXT",
+                                      "retract_note TEXT"],
+                            "requests": ["receipt TEXT"]}.items():
+            have_cols = {r["name"] for r in con.execute(
+                f"PRAGMA table_info({table})").fetchall()}
+            for col in cols:
+                if col.split()[0] not in have_cols:
+                    con.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
         cols = {r["name"] for r in con.execute("PRAGMA table_info(clauses)").fetchall()}
         if "audiences" not in cols:
             con.execute("ALTER TABLE clauses ADD COLUMN audiences TEXT")
@@ -430,16 +445,94 @@ def add_mark(clause_id: str | None, kind: str, body: str,
              proposed: str | None) -> int:
     if kind not in ("question", "edit", "comment"):
         kind = "comment"
+    receipt = secrets.token_hex(4)
     with connect() as con:
-        cur = con.execute(
+        con.execute(
             "INSERT INTO marks (clause_id, kind, quote_text, proposed_text,"
-            " body, author_label, contact, reply_to, status, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,'queued',?)",
+            " body, author_label, contact, reply_to, status, created_at,"
+            " receipt) VALUES (?,?,?,?,?,?,?,?,'queued',?,?)",
             (clause_id or None, kind, (quote or "").strip() or None,
              (proposed or "").strip() or None, body.strip(),
              (name or "").strip() or None,
-             (contact or "").strip() or None, reply_to or None, utc_now()))
-        return cur.lastrowid
+             (contact or "").strip() or None, reply_to or None, utc_now(),
+             receipt))
+    return receipt
+
+
+def mark_retract(mark_id: int, note: str | None = None) -> bool:
+    """Visibly retract a read-in mark — the record stays, struck through."""
+    with connect() as con:
+        cur = con.execute(
+            "UPDATE marks SET retracted_at = ?, retract_note = ?"
+            " WHERE id = ? AND status = 'read_in' AND retracted_at IS NULL",
+            (utc_now(), (note or "").strip() or None, mark_id))
+        return cur.rowcount > 0
+
+
+def by_receipt(code: str) -> dict | None:
+    """Submitter status lookup — status only, never contact or raw body."""
+    code = (code or "").strip()
+    if not code:
+        return None
+    with connect() as con:
+        r = con.execute(
+            "SELECT public_no, status, clause_id, kind, created_at,"
+            " read_in_at, retracted_at FROM marks WHERE receipt = ?",
+            (code,)).fetchone()
+        if r:
+            d = dict(r); d["type"] = "mark"; return d
+        r = con.execute(
+            "SELECT public_no, req_type, status, clause_id, created_at,"
+            " updated_at FROM requests WHERE receipt = ?",
+            (code,)).fetchone()
+        if r:
+            d = dict(r); d["type"] = "request"; return d
+    return None
+
+
+def search(term: str) -> dict:
+    like = f"%{term}%"
+    with connect() as con:
+        return {
+            "clauses": con.execute(
+                "SELECT id, heading, status FROM clauses WHERE id LIKE ?"
+                " OR heading LIKE ? OR statute_text LIKE ? OR plain_text LIKE ?"
+                " ORDER BY ord", (like,) * 4).fetchall(),
+            "marks": con.execute(
+                "SELECT public_no, clause_id, kind, body FROM marks"
+                " WHERE status = 'read_in' AND retracted_at IS NULL AND"
+                " (public_no LIKE ? OR body LIKE ? OR quote_text LIKE ?"
+                " OR response_body LIKE ?) ORDER BY public_no",
+                (like,) * 4).fetchall(),
+            "changes": con.execute(
+                "SELECT public_no, clause_id, status, proposed_text FROM changes"
+                " WHERE public_no LIKE ? OR proposed_text LIKE ?"
+                " OR note LIKE ? OR edition LIKE ?"
+                " ORDER BY created_at DESC", (like,) * 4).fetchall(),
+            "requests": con.execute(
+                "SELECT public_no, req_type, summary, status FROM requests"
+                " WHERE is_public = 1 AND (public_no LIKE ? OR summary LIKE ?"
+                " OR details LIKE ?) ORDER BY updated_at DESC",
+                (like,) * 3).fetchall(),
+            "editions": con.execute(
+                "SELECT edition, date, clause, change FROM editions WHERE"
+                " edition LIKE ? OR clause LIKE ? OR change LIKE ?",
+                (like,) * 3).fetchall(),
+            "decisions": con.execute(
+                "SELECT num, clause, title FROM decisions WHERE title LIKE ?"
+                " OR why LIKE ? OR clause LIKE ?", (like,) * 3).fetchall(),
+        }
+
+
+def export_state() -> dict:
+    """Full backup for a steward — includes intake and contact fields,
+    which is why this only serves behind the steward gate."""
+    tables = ("titles", "clauses", "claims", "decisions", "journey",
+              "editions", "marks", "changes", "requests", "positions")
+    with connect() as con:
+        return {"meta": meta(),
+                **{t: [dict(r) for r in con.execute(
+                    f"SELECT * FROM {t} ORDER BY rowid")] for t in tables}}
 
 
 def mark_action(mark_id: int, action: str,
@@ -485,14 +578,20 @@ def mark_action(mark_id: int, action: str,
 CHANGE_STATUSES = ("proposed", "incorporated", "declined", "retracted")
 
 
-def changes(status: str | None = None,
-            clause_id: str | None = None) -> list[sqlite3.Row]:
+def changes(status: str | None = None, clause_id: str | None = None,
+            since: str | None = None,
+            edition: str | None = None) -> list[sqlite3.Row]:
     q, args = ("SELECT c.*, m.public_no AS mark_no FROM changes c"
                " LEFT JOIN marks m ON m.id = c.source_mark WHERE 1=1"), []
     if status:
         q += " AND c.status = ?"; args.append(status)
     if clause_id:
         q += " AND c.clause_id = ?"; args.append(clause_id)
+    if edition:
+        q += " AND c.edition = ?"; args.append(edition)
+    if since:
+        q += (" AND COALESCE(c.resolved_at, c.created_at) >= ?")
+        args.append(since)
     q += (" ORDER BY COALESCE(c.resolved_at, c.created_at) DESC, c.id DESC")
     with connect() as con:
         return con.execute(q, args).fetchall()
@@ -556,17 +655,18 @@ def add_request(req_type: str, summary: str, details: str | None,
                 contact: str | None) -> str:
     if req_type not in REQ_TYPES:
         req_type = "other"
+    receipt = secrets.token_hex(4)
     with connect() as con:
         public_no = _next_no(con, "requests", "R")
         con.execute(
             "INSERT INTO requests (public_no, req_type, clause_id,"
-            " org_or_role, contact_info, summary, details, status,"
-            " created_at, updated_at) VALUES (?,?,?,?,?,?,?,'new',?,?)",
+            " org_or_role, contact_info, summary, details, status, receipt,"
+            " created_at, updated_at) VALUES (?,?,?,?,?,?,?,'new',?,?,?)",
             (public_no, req_type, clause_id or None,
              (org_or_role or "").strip() or None,
              (contact or "").strip() or None, summary.strip(),
-             (details or "").strip() or None, utc_now(), utc_now()))
-    return public_no
+             (details or "").strip() or None, receipt, utc_now(), utc_now()))
+    return receipt
 
 
 def request_status(req_id: int, status: str,

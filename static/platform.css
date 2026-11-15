@@ -455,3 +455,31 @@ a.next { font-weight: 700; color: var(--link); }
 .ch-diff { border-left: 2px solid var(--line); padding-left: 14px; margin: 8px 0; }
 .ch-old { color: var(--mut); text-decoration: line-through; }
 .ch-new { color: var(--ink); }
+
+/* ---------- accessibility, print, new components ---------- */
+.skip { position: absolute; left: -9999px; top: 0; background: var(--ink);
+  color: var(--paper); padding: 8px 14px; z-index: 99; border-radius: 0 0 6px 0; }
+.skip:focus { left: 8px; top: 8px; }
+.hp { position: absolute !important; left: -9999px !important; height: 1px;
+  width: 1px; overflow: hidden; }
+.plink { color: var(--mut); font-family: var(--mono); font-size: 0.8rem; }
+.mark.retracted { opacity: 0.72; }
+.mark.retracted del { color: var(--mut); }
+.rc { font-family: var(--mono); letter-spacing: 0.04em; }
+.teach-stop h3 { margin: 6px 0; }
+.teach-prompt { border-left: 2px solid var(--amber, #8a6d1f); padding-left: 12px;
+  color: var(--mut); }
+
+@media print {
+  .topbar, .toolbar, .desk-rail, .mobile-bar, .foot, form, .annot, .pnav,
+  .skip, .mact, details.stack { display: none !important; }
+  .workspace { display: block; }
+  .page { max-width: none; padding: 0 12px; }
+  .clause, .mark { break-inside: avoid; }
+  h2.title-head { break-before: page; }
+  a { color: var(--ink); text-decoration: none; }
+}
+.speaker-notes { position: fixed; left: 0; right: 0; bottom: 0; margin: 0;
+  padding: 10px 24px; background: var(--card); border-top: 1px solid var(--line);
+  font-size: 0.95rem; color: var(--mut); }
+.is-stage .speaker-notes + .stage-foot { margin-bottom: 56px; }

@@ -63,3 +63,12 @@ lane, then incorporate them (with edition ref + before/after statute
 diff), decline, or retract — nothing is deleted, only resolved. Each
 clause page now shows its own change history. Fixed `_next_no` to support
 multi-letter prefixes (CH-).
+
+### Next — v1.1 coverage pass + Teach page
+Full gap sweep: mark permalinks (/margin#M-0001), visible retract for
+read-in marks, private receipt codes + /track status lookup, /search
+across the whole record, shareable calculator URLs, honeypot + rate
+limit on public posts, og/description meta, print stylesheet, skip-link,
+steward /api/export backup, speaker notes on the TV deck (?notes=1),
+and /teach — a 14-stop guided path through the bill with plain language
+and discussion prompts for classrooms and tenant meetings.
