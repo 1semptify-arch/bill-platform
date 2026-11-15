@@ -82,3 +82,16 @@ Amy Klobuchar (endorsed) plus 14 coalition targets (HOME Line, HJC, IX,
 CTUL, legal aid, faith orgs, MHA, MHFA, SFM, Eviction Lab). /packet is
 the printable testimony packet — read-in marks grouped by clause. Clause
 pages gained a "Send to a legislator" mailto action.
+
+## 2026-11-14 (deploy prep)
+
+### Remote deploy path — GitHub → Render → Cloudflare + R2
+The platform no longer has to live on Brad's machine. Repo pushed to
+GitHub (`1semptify-arch/bill-platform`, private); `render.yaml`
+blueprint deploys it as a Render **free-tier** web service. The SQLite
+ledger persists via **Litestream → Cloudflare R2** (the storage
+Semptify already uses): every write streams to R2 in near-real-time and
+the DB auto-restores on boot — no paid disk needed. `PORT`/`HOST` and
+`PLATFORM_DB` are now env-driven. Cloudflare's role stays front-door
+only (DNS + TLS at platform.semptify.org). `AGENTS.md` updated:
+loopback is now the local-dev rule, not the only mode.

@@ -70,9 +70,17 @@ Plan: actuarial verify → coalition → testimony via margin → file Jan
 
 - Incorporate doesn't yet apply new text to the draft (manual today).
 - No multilingual (Spanish/Somali/Hmong plain text is the first).
-- Not publicly reachable — loopback only; deploy needs
-  `BILL_STEWARD_CODE` + a tunnel/host or snapshot export to the mirror.
-- No git remote yet (local repo, 12 commits on `main`).
+- Remote deploy prepared, not yet live: `render.yaml` blueprint (Render
+  free web service) + `litestream.yml` (SQLite → Cloudflare R2
+  replication; restore-on-boot). Repo pushed to
+  `github.com/1semptify-arch/bill-platform` (private). Remaining steps
+  are dashboard-side: Render blueprint deploy + env vars
+  (`BILL_STEWARD_CODE`, R2 bucket/endpoint/token), then Cloudflare
+  CNAME `platform.semptify.org` → Render host. Free tier sleeps on
+  idle (~30 s cold wake).
+- Contact fields note: when this joins the semptify.org family under
+  the OAuth-storage keystone, contact data should move to that pattern
+  or be dropped (public-side PII rule).
 
 ## Files
 

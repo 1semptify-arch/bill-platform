@@ -7,9 +7,14 @@ Deposit Protection Act. Small on purpose — keep it that way.
 
 - **Python 3.11, stdlib only.** No FastAPI, no Jinja, no pip — this repo
   must run with nothing installed. (House rule: zero-cost, runs anywhere.)
-- **Loopback by default.** Bind `127.0.0.1`, port **8093** (`PORTS.md`).
-  Independent micro-repo, decoupled from Semptify's `ssot.css` / `sync_assets.py`
-  constraints while keeping the canonical bill substance intact.
+- **Loopback for local dev; Render for public.** Local dev binds
+  `127.0.0.1`, port **8093** (`PORTS.md`). Public deploy runs on Render
+  free tier (`render.yaml` blueprint): `PORT`/`HOST` env-driven, SQLite
+  persisted to Cloudflare R2 via Litestream (`litestream.yml`). Prod
+  MUST set `BILL_STEWARD_CODE` — one-tap steward unlock auto-disables
+  off-loopback. Independent micro-repo, decoupled from Semptify's
+  `ssot.css` / `sync_assets.py` constraints while keeping the canonical
+  bill substance intact.
 - **Intake is dark & Steward-gated.** Marks never render publicly until
   `read_in`. Queued intake bodies and triage mutations (`/api/mark_action`,
   `/api/request_status`) require Steward mode (`1-tap` on loopback when

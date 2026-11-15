@@ -1,19 +1,30 @@
-# Render blueprint — deploys the Bill Platform as a web service with a
-# persistent disk for the SQLite database (the public ledger survives
-# redeploys). Create: Render Dashboard → New → Blueprint → point at this repo.
+# Render blueprint — Bill Platform, all free tier.
+# Web service (free) + Litestream → Cloudflare R2 for SQLite persistence.
+# Free tier has no persistent disk, so the DB lives on the ephemeral
+# filesystem and Litestream keeps R2 in sync + restores on boot.
+# Create: Render Dashboard → New → Blueprint → point at this repo.
+#
+# Dashboard env vars to set (sync:false = secrets, never in the file):
+#   BILL_STEWARD_CODE           — steward passcode (REQUIRED in prod)
+#   R2_BUCKET                   — e.g. bill-platform-db
+#   R2_ENDPOINT                 — https://<account-id>.r2.cloudflarestorage.com
+#   LITESTREAM_ACCESS_KEY_ID    — R2 API token
+#   LITESTREAM_SECRET_ACCESS_KEY
 services:
   - type: web
     name: bill-platform
     runtime: python
-    plan: starter
-    buildCommand: ""
-    startCommand: python server.py --host 0.0.0.0
+    plan: free
+    buildCommand: curl -sL https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz | tar xz
+    startCommand: mkdir -p data && ./litestream-v0.3.13-linux-amd64/litestream restore -if-replica-exists -config litestream.yml ./data/platform.db; ./litestream-v0.3.13-linux-amd64/litestream replicate -config litestream.yml -exec "python server.py --host 0.0.0.0"
     envVars:
       - key: BILL_STEWARD_CODE
-        sync: false           # set this in the dashboard — REQUIRED in prod
-      - key: PLATFORM_DB
-        value: /var/data/platform.db
-    disk:
-      name: bill-platform-data
-      mountPath: /var/data
-      sizeGB: 1
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: LITESTREAM_ACCESS_KEY_ID
+        sync: false
+      - key: LITESTREAM_SECRET_ACCESS_KEY
+        sync: false

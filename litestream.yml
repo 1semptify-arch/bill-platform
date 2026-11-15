@@ -1,0 +1,12 @@
+# Litestream — continuous SQLite replication to Cloudflare R2.
+# Streams WAL changes to R2 every few seconds while the app runs;
+# on boot `replicate -exec` auto-restores platform.db if the local
+# file is missing (fresh Render instance / redeploy).
+# R2 is S3-compatible: endpoint = https://<account-id>.r2.cloudflarestorage.com
+dbs:
+  - path: ./data/platform.db
+    replicas:
+      - type: s3
+        bucket: ${R2_BUCKET}
+        endpoint: ${R2_ENDPOINT}
+        force-path-style: true
