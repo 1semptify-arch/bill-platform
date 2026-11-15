@@ -53,8 +53,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   font-family: var(--serif); font-weight: 700; font-size: 1.25rem;
   color: var(--ink); letter-spacing: -0.02em; line-height: 1.15;
 }
-.brand-logo { height: 34px; width: auto; }
-.foot-logo { height: 20px; width: auto; vertical-align: -4px; margin-right: 8px; }
+.brand-logo { height: 68px; width: auto; }
+.foot-logo { height: 40px; width: auto; vertical-align: -4px; margin-right: 8px; }
 .brand:hover { text-decoration: none; }
 .brand small {
   display: block; font-family: var(--sans); font-weight: 400;

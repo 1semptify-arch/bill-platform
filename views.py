@@ -175,7 +175,7 @@ def page(title: str, body: str, ctx: dict,
 </div>
 <footer class="foot">
   <p class="foot-brand"><img class="foot-logo" src="/static/logo.svg" alt=""><b>Presented by <a href="https://semptify.org">Semptify</a></b>
-  — housing rights, written in public. A Minnesota nonprofit project.</p>
+  — housing rights, written in public. A Semptify project.</p>
   <p>Working draft — nothing here is filed law. Marks land in intake and
   are read into the ledger by a person, never automatically.</p>
   <p class="foot-nav"><a href="/">Home</a> · <a href="/desk">Desk</a> ·
