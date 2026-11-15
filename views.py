@@ -195,6 +195,8 @@ def page(title: str, body: str, ctx: dict,
   <p>Working draft — nothing here is filed law. Marks land in intake and
   are read into the ledger by a person, never automatically.
   <a href="/help">Need help now?</a></p>
+  <p class="foot-thanks">With gratitude to the men and women who serve —
+  and have served — in the Armed Forces of the United States.</p>
   <p class="foot-nav"><a href="/">Home</a> · <a href="/desk">Desk</a> ·
   <a href="/bill">The bill</a> · <a href="/calculator">Funding braid</a> ·
   <a href="/margin">The margin</a> · <a href="/intake">Intake</a> ·

@@ -318,6 +318,7 @@ a.next { font-weight: 700; color: var(--link); }
 .stack label.consent input { width: auto; margin-top: 3px; }
 .mn-flag { height: 20px; width: auto; border-radius: 2px; vertical-align: -4px; margin-right: 6px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
 .foot-flag { height: 20px; width: auto; border-radius: 2px; vertical-align: -4px; margin: 0 8px 0 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+.foot-thanks { color: var(--mut); font-size: 0.85rem; letter-spacing: 0.01em; }
 .btn {
   margin-top: 14px; padding: 9px 18px; font: inherit; font-size: 0.88rem; font-weight: 600;
   background: var(--ink); color: #fff; border: 0; border-radius: 5px; cursor: pointer;
