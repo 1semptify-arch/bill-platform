@@ -16,7 +16,10 @@ services:
     runtime: python
     plan: free
     buildCommand: curl -sL https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz | tar xz
-    startCommand: mkdir -p data && ./litestream-v0.3.13-linux-amd64/litestream restore -if-replica-exists -config litestream.yml ./data/platform.db; ./litestream-v0.3.13-linux-amd64/litestream replicate -config litestream.yml -exec "python server.py --host 0.0.0.0"
+    # Litestream only runs when R2 creds are set — without them the app
+    # still boots and serves (ephemeral DB). This keeps the deploy green
+    # while R2 API tokens (dashboard-only to create) are pending.
+    startCommand: mkdir -p data && if [ -n "$LITESTREAM_ACCESS_KEY_ID" ]; then ./litestream-v0.3.13-linux-amd64/litestream restore -if-replica-exists -config litestream.yml ./data/platform.db; exec ./litestream-v0.3.13-linux-amd64/litestream replicate -config litestream.yml -exec "python server.py --host 0.0.0.0"; else exec python server.py --host 0.0.0.0; fi
     envVars:
       - key: BILL_STEWARD_CODE
         sync: false
