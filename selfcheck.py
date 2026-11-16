@@ -483,6 +483,22 @@ def main() -> int:
         st, flag, _ = get("/static/mn-flag.svg")
         check("MN flag asset serves", st == 200 and "<svg" in flag)
 
+        # consolidated mirror content — same source, platform chrome
+        for slug in ("research", "history", "providers", "brief",
+                     "classroom", "press", "myths"):
+            st, html, _ = get(f"/bill/{slug}")
+            check(f"content page /bill/{slug} serves in platform chrome",
+                  st == 200 and "rail" in html)
+        st, html, _ = get("/what-the-bill-changes")
+        check("what-the-bill-changes serves", st == 200)
+        st2, hdrs2, _ = get("/your-voice")
+        check("your-voice redirects to platform mark", st2 in (200, 303))
+        st3, hdrs3, _ = get("/bill/live")
+        check("bill/live redirects to platform bill", st3 in (200, 303))
+        st, html, _ = get("/bill/history")
+        check("history page links live ledger", st == 200
+              and "/editions" in html and "/changes" in html)
+
         # rate limit: flood /api/mark — 12th+ within 5 min must 429
         flood = [post("/api/mark", {"body": f"flood {i}"})[0]
                  for i in range(14)]

@@ -1,6 +1,12 @@
-# Bill Platform — standalone minimalist micro-repo
+# Bill Platform — the one bill repo
 
-Self-contained local platform for presenting and working the **Minnesota
+This repo holds the whole bill: the **interactive platform** (working
+desk — boards, intake, signatures, campaign, change ledger) AND the
+**public static mirror** source (`site-src/` → `site/` → Cloudflare
+Worker → semptify.org/bill). One SSOT, one build guide, one build
+state, one operations log.
+
+Self-contained platform for presenting and working the **Minnesota
 Rent Assurance & Deposit Protection Act** (Turnbuchalla). Built in pure
 Python 3.11 standard library + SQLite (`data/platform.db`) with zero
 external runtime dependencies and zero coupling to the Semptify app's CSS

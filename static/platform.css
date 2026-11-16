@@ -6,6 +6,20 @@
    Warm monochrome palette; color encodes state only; 1px hairline borders; zero emoji. */
 
 :root {
+  /* northstar aliases — lets mirror page fragments (site-src/pages,
+     one source for both UIs) render inside platform chrome */
+  --card-bg: var(--card);
+  --bg-surface: var(--card);
+  --text-muted: var(--mut);
+  --text-secondary: var(--mut);
+  --text-primary: var(--ink);
+  --text-inverse: #ffffff;
+  --ink-soft: var(--mut);
+  --card-border: var(--line);
+  --border-color: var(--line);
+  --accent-primary: var(--ink);
+  --color-primary: var(--ink);
+  --radius-block: 6px;
   --ink: #24211d;
   --mut: #6f6961;
   --paper: #fbfaf7;
@@ -319,6 +333,7 @@ a.next { font-weight: 700; color: var(--link); }
 .mn-flag { height: 20px; width: auto; border-radius: 2px; vertical-align: -4px; margin-right: 6px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
 .foot-flag { height: 20px; width: auto; border-radius: 2px; vertical-align: -4px; margin: 0 8px 0 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
 .foot-thanks { color: var(--mut); font-size: 0.85rem; letter-spacing: 0.01em; }
+.rail-sep { margin-top: 12px; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); }
 .btn {
   margin-top: 14px; padding: 9px 18px; font: inherit; font-size: 0.88rem; font-weight: 600;
   background: var(--ink); color: #fff; border: 0; border-radius: 5px; cursor: pointer;

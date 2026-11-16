@@ -15,9 +15,13 @@ actions, sentences not chips, hairline 1px borders only, zero emoji.
 from __future__ import annotations
 
 import html
+import re
 import urllib.parse
+from pathlib import Path
 
 import db
+
+HERE = Path(__file__).resolve().parent
 
 BRAND = "Turnbuchalla"
 SUB = "MN Rent Assurance & Deposit Protection Act — working platform"
@@ -106,10 +110,24 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
         ("/editions", "Editions"),
         ("/intake", f"Intake Queue ({n_q})"),
         ("/tv", "TV Briefing Deck"),
+        ("—", "Public pages"),
+        ("/bill/research", "Numbers & Sources"),
+        ("/bill/history", "History"),
+        ("/bill/providers", "For Providers"),
+        ("/bill/brief", "The Brief"),
+        ("/bill/classroom", "Classroom"),
+        ("/bill/press", "Press"),
+        ("/bill/myths", "Myths"),
+        ("/what-the-bill-changes", "What Changes"),
     ]
     links = []
     for href, label in nav_items:
-        active = (path == href) or (href == "/bill" and path.startswith("/clause/"))
+        if href == "—":
+            links.append(f'<li class="rail-sep">{esc(label)}</li>')
+            continue
+        active = ((path == href) or
+                  (href == "/bill" and path.startswith("/clause/")) or
+                  (href.startswith("/bill/") and path == href))
         cls = ' class="rail-on"' if active else ""
         links.append(f'<li><a href="{href}"{cls}>{esc(label)}</a></li>')
 
@@ -1835,6 +1853,65 @@ that's what makes the ledger honest.</p>
         ("Sign the bill", "/sign", "link"),
         ("Home", "/", "link"),
     ], "Legal")
+
+
+# ---------- mirror content pages (one source, two UIs) ----------
+# site-src/pages/*.html is the SAME source the static mirror builds
+# from — the platform renders it inside platform chrome, the Worker
+# serves it inside northstar chrome. Edit the fragment once; both
+# faces change.
+
+CONTENT_PAGES = {
+    "research": "The numbers & sources",
+    "history": "Bill history",
+    "providers": "For housing providers",
+    "brief": "The brief",
+    "classroom": "Classroom",
+    "press": "Press",
+    "myths": "Myths & straight answers",
+    "what-the-bill-changes": "What the bill changes",
+}
+
+# Mirror-space links → platform-space routes
+_LINK_MAP = {
+    "/bill/live": "/bill",
+    "/your-voice": "/mark",
+    "/contact": "/requests",
+    "/donate": "/campaign",
+    "/turnbuchalla/bill-packet.pdf": "/packet",
+}
+
+_HISTORY_NOTE = (
+    '<p class="quiet">The live change record is the platform ledger — '
+    'see <a href="/editions">Editions</a> and '
+    '<a href="/changes">Changes</a>. The published commit history is '
+    'mirrored on the static site build.</p>')
+
+
+def content_page(slug: str, ctx: dict) -> bytes | None:
+    """Serve a mirror page fragment inside platform chrome."""
+    p = HERE / "site-src" / "pages" / f"{slug}.html"
+    if not p.is_file():
+        return None
+    text = p.read_text(encoding="utf-8")
+    m = re.match(r"\s*<!--(.*?)-->", text, re.S)
+    meta, body = {}, text
+    if m:
+        for line in m.group(1).strip().splitlines():
+            if ":" in line:
+                k, v = line.split(":", 1)
+                meta[k.strip()] = v.strip()
+        body = text[m.end():].strip()
+    body = body.replace("{{BILL_HISTORY}}", _HISTORY_NOTE)
+    body = body.replace("{{BILL_DRAFT}}", "").replace("{{BILL_STATUTE}}", "")
+    for old, new in _LINK_MAP.items():
+        body = body.replace(f'href="{old}"', f'href="{new}"')
+    title = CONTENT_PAGES.get(slug, meta.get("title", slug).replace("&amp;", "&"))
+    return page(title, body, ctx, [
+        ("The draft", "/bill", "primary"),
+        ("Mark it", "/mark", "link"),
+        ("Home", "/", "link"),
+    ], meta.get("desc", "").replace("&amp;", "&"))
 
 
 def packet(ctx: dict) -> bytes:

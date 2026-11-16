@@ -382,6 +382,23 @@ class Handler(BaseHTTPRequestHandler):
                 clause_id, q.get("re", [None])[0],
                 q.get("q", [None])[0], q.get("kind", [None])[0], ctx),
         }
+        if path == "/your-voice":
+            self._redirect("/mark")
+            return
+        if path == "/bill/live":
+            self._redirect("/bill")
+            return
+        if path == "/what-the-bill-changes":
+            self._send(views.content_page("what-the-bill-changes", ctx)
+                       or views.not_found(ctx))
+            return
+        if path.startswith("/bill/"):
+            slug = path[len("/bill/"):]
+            body = (views.content_page(slug, ctx)
+                    if slug in views.CONTENT_PAGES else None)
+            self._send(body if body else views.not_found(ctx),
+                       200 if body else 404)
+            return
         if path.startswith("/clause/"):
             cid = urllib.parse.unquote(path[len("/clause/"):])
             body = views.clause_view(cid, ctx)

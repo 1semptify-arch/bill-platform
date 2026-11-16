@@ -1,0 +1,56 @@
+<!--
+title: The Live Draft — Minnesota Rent Assurance Bill — Semptify
+desc: The real working draft of the Minnesota rent assurance and deposit protection bill — refreshed at each publish, every figure triple-checked or honestly marked.
+nav: live
+chrome: interior
+-->
+
+<style>
+.bill-text { padding:2rem 2.25rem; max-width:46rem;
+                 font-size:1.05rem; line-height:1.7; }
+    .bill-text h3 { color:var(--accent-primary); margin:1.6rem 0 0.4rem; font-size:1.35rem; }
+    .bill-text h4.clause-head { color:var(--accent-primary); margin:1.4rem 0 0.3rem; font-size:1.1rem; }
+    .bill-text p { margin:0 0 1rem; }
+    .bill-text ul { margin:0 0 1rem 1.5rem; color:var(--text-secondary); }
+    .bill-text hr.bill-rule { border:0; border-top:1px solid var(--card-border); margin:1.4rem 0; }
+    .draft-label { font-family:inherit; font-size:0.85rem; letter-spacing:0.08em;
+                   text-transform:uppercase; color:var(--text-muted); }
+    .draft-status { border-top:1px solid var(--card-border); padding-top:1rem;
+                    font-size:0.95rem; color:var(--text-secondary); }
+.bill-notes summary { cursor:pointer; padding:0.85rem 2.25rem; font-weight:600;
+                   color:var(--accent-primary); }
+</style>
+
+<main id="main-content" class="shell-main shell-main--top" tabindex="-1">
+
+
+<p class="shell-eyebrow">Semptify</p>
+<h1>The live draft</h1>
+
+<p class="shell-lede">The real working text — refreshed at each publish.</p>
+
+
+<p class="shell-note" style="margin-bottom:1.25rem;">Not a summary, not a press release. When the draft changes, this page changes. The clean reading copy is below; the verbatim working file — drafting shorthand and all — is folded under it.</p>
+
+
+
+
+<section class="section">
+    <div class="bill-text">
+        {{BILL_STATUTE}}
+    </div>
+</section>
+
+<section class="section">
+    <details class="bill-notes">
+        <summary>The working file — drafting notes and all</summary>
+        <div class="bill-text">
+            {{BILL_DRAFT}}
+        </div>
+    </details>
+</section>
+
+
+
+
+    </main>

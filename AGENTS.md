@@ -42,3 +42,18 @@ python selfcheck.py     # must end with SELFCHECK PASS
 - `static/platform.js` — Brain layer: viewport mode suggest, multi-clause selection toolbar, live 60fps funding-braid math, TV slide keys (`←`/`→`/`Space`/`1`–`8`/`F`/`Esc`).
 - `seed/` — canonical editions register + upstream clause extractor.
 - `data/platform.db` — runtime SQLite database, gitignored.
+
+
+## The public mirror (site-src -> site -> Worker)
+
+- Edit `site-src/pages/*.html` + `site-src/partials/*` — never `site/*.html`
+  directly. Output files are the served contract: `python build.py`, then
+  commit `site/` with the source change (the Cloudflare Worker pulls
+  `site/` from GitHub, ~5-min cache).
+- `build.py` runs `sync_assets.py --check` first — vendored app assets
+  must match `../modules/app-semptify-fastapi` or the build fails.
+- `worker.js` PAGES/ASSETS maps are the public URL contract — a new
+  public page needs a map entry + worker redeploy.
+- Same fragments, two UIs: `/bill/<page>` routes serve `site-src/pages`
+  inside platform chrome (`views.content_page`). Public-side rules apply
+  to mirror content: no advertising, no third-party promotion, no PII.
