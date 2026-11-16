@@ -120,3 +120,14 @@ What's live, what's pending. Updated when state changes — not a changelog
   pending one proxied DNS record (CNAME platform → bill-platform-5873.onrender.com).
 - **Persistence:** ephemeral until LITESTREAM_ACCESS_KEY_ID/SECRET set
   (R2 API token = dashboard-only creation). Bucket ready: bill-platform-db.
+
+## Public address (2026-11-16)
+
+- **semptify.org/bill IS the platform now** — proxy worker routes the
+  bill URL space to the Render app (mounted at /bill). One UI with
+  smart nav/toolbars across reading + mechanics.
+- Old mirror content = same site-src fragments rendered in platform
+  chrome; static site/ build remains as archive/rollback (worker
+  dormant but deployed — re-point routes to roll back).
+- Render: BILL_MOUNT=/bill + BILL_STEWARD_CODE set; R2 litestream
+  dormant pending dashboard-created API token.

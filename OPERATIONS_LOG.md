@@ -775,3 +775,22 @@ the mark form's crisis line now links to the help page.
   one proxied DNS record (platform CNAME → bill-platform-5873.onrender.com)
   — DNS write scope unavailable via API; single dashboard step.
 - Live checks: /, /margin, /api/state 200; steward POST w/o auth 403.
+
+## 2026-11-16 — Platform mounted at semptify.org/bill (one URL, one UI)
+
+- **BILL_MOUNT=/bill** — platform generates /bill-prefixed links
+  (views.MOUNT postprocess in page(), server strips prefix on route,
+  redirects re-prefix). platform.js reads data-mount.
+- **Routes repointed:** semptify.org/bill* + /your-voice* +
+  /what-the-bill-changes* (+www) → bill-platform-proxy worker →
+  Render origin. bill-mirror keeps /, /static/*, /gen-image*
+  (main Semptify site untouched).
+- **proxy.js** remaps the two non-/bill paths into the mount; keep-warm
+  cron */14min keeps Render free tier awake (~720 of 750 free hrs).
+- **platform.semptify.org** custom domain also live (same proxy).
+- Content slugs registered bare AND under /bill/ — serves mounted and
+  unmounted. /bill/live → reader redirect.
+- Verified live: /bill/, /bill/margin, /bill/sign, /bill/research,
+  /bill/brief, /bill/myths, /bill/history, /bill/desk all 200;
+  /bill/live 303→reader. data-mount + prefixed links confirmed.
+- Selfcheck +7 mounted-mode checks (subprocess instance, BILL_MOUNT set).
