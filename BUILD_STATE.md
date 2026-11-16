@@ -99,3 +99,15 @@ What's live, what's pending. Updated when state changes — not a changelog
 - 3 screen modes + auto-detect + smart toolbars. Steward one-tap is
   loopback-only; prod needs BILL_STEWARD_CODE.
 - 100+ selfchecks green.
+
+## Consolidation state (2026-11-16)
+
+- **One repo:** `1semptify-arch/bill-platform` = static mirror build
+  (site-src→site) + interactive platform (server/db/views→Render).
+  Old mirror repo archived.
+- **served:** semptify.org/bill* via bill-mirror Worker → site/ on
+  GitHub main (~5min cache). platform.semptify.org → Render, pending
+  dashboard setup (env: BILL_STEWARD_CODE + 4 R2 vars).
+- **SSOT:** canonical bill text still upstream in app-semptify turnbuchalla;
+  both renderers derive from it (sync gate + extract_clauses.py).
+- Selfcheck green incl. content routes.

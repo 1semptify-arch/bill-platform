@@ -13,3 +13,4 @@ nul.*
 .DS_Store
 Thumbs.db
 reference/
+.wrangler/

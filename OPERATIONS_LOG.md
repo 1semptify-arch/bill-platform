@@ -736,3 +736,24 @@ the mark form's crisis line now links to the help page.
   head.html. New assets at repo root: mn-flag.png, loon.png, cherry.jpg,
   doc-page.jpeg. Built via build.py; verified locally — all assets 200,
   fonts load. NOT yet pushed — awaiting Brad's visual check.
+
+## 2026-11-16 — Consolidation shipped
+
+- **Mirror merged into bill-platform.** `src/` → `site-src/`, generated
+  output → `site/`. build.py + sync_assets.py retargeted; all 11 static
+  pages byte-identical to the old mirror build (verified research, myths,
+  what-the-bill-changes).
+- **One UI.** Same `site-src/pages/*.html` fragments now also render
+  inside platform chrome (rail + smart toolbar) at their production
+  paths — /bill/research, /bill/myths, /what-the-bill-changes,
+  /your-voice, etc. One source file, two renderers.
+- **bill-mirror Worker redeployed** (v18821483) — BASE now
+  `raw.githubusercontent.com/1semptify-arch/bill-platform/main/site/`.
+  Verified live: semptify.org/bill, /bill/research, /your-voice all 200.
+- **Old repo retired.** semptify-bill-mirror: pointer README pushed,
+  repo archived (public, read-only).
+- **bill-platform made public** (required for Worker raw fetches).
+  GitHub briefly flagged repo "disabled" during the visibility flip —
+  transient, cleared on retry. Push 3cc8fe9 confirmed.
+- Selfcheck: SELFCHECK PASS — all routes, 3 modes, toolbars, steward
+  gates, boards, and the new content routes.
