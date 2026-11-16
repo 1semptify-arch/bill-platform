@@ -21,6 +21,8 @@ Exits 0 with SELFCHECK PASS, non-zero on any failure. Stdlib only.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -519,6 +521,60 @@ def main() -> int:
 
         st, html, _ = get("/nope")
         check("404 page", st == 404)
+
+        # ---- 8. Mount mode (BILL_MOUNT=/bill — semptify.org/bill) -----
+        env = {**os.environ, "BILL_MOUNT": "/bill",
+               "PLATFORM_DB": str(tmp / "mount.db")}
+        proc = subprocess.Popen(
+            [sys.executable, "server.py", "--port", "18094"],
+            cwd=HERE, env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(40):
+                try:
+                    urllib.request.urlopen(
+                        "http://127.0.0.1:18094/bill/", timeout=1)
+                    break
+                except Exception:
+                    time.sleep(0.25)
+            mbase = "http://127.0.0.1:18094"
+
+            def mget(p):
+                req = urllib.request.Request(mbase + p)
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        return r.status, r.read().decode("utf-8", "replace")
+                except urllib.error.HTTPError as e:
+                    return e.code, e.read().decode("utf-8", "replace")
+
+            def mraw(p):
+                req = urllib.request.Request(mbase + p)
+                try:
+                    with raw.open(req, timeout=10) as r:
+                        return r.status, dict(r.headers)
+                except urllib.error.HTTPError as e:
+                    return e.code, dict(e.headers)
+
+            st, hdrs = mraw("/")
+            check("mounted / redirects to /bill/", st == 303
+                  and hdrs.get("Location") == "/bill/")
+            st, hdrs = mraw("/margin")
+            check("unmounted path redirects into mount", st == 303
+                  and hdrs.get("Location") == "/bill/margin")
+            st, html = mget("/bill/")
+            check("mounted home serves with prefixed links", st == 200
+                  and 'href="/bill/margin"' in html
+                  and 'href="/bill/sign"' in html
+                  and 'href="/margin"' not in html
+                  and 'data-mount="/bill"' in html)
+            st, html = mget("/bill/api/state")
+            check("mounted api serves", st == 200 and "clauses" in html)
+            st, hdrs = mraw("/bill/steward/toggle")
+            check("mounted steward toggle redirects in mount", st == 303
+                  and (hdrs.get("Location") or "").startswith("/bill"))
+        finally:
+            proc.terminate()
+            proc.wait(timeout=10)
 
     finally:
         srv.shutdown()

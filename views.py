@@ -15,6 +15,7 @@ actions, sentences not chips, hairline 1px borders only, zero emoji.
 from __future__ import annotations
 
 import html
+import os
 import re
 import urllib.parse
 from pathlib import Path
@@ -25,6 +26,10 @@ HERE = Path(__file__).resolve().parent
 
 BRAND = "Turnbuchalla"
 SUB = "MN Rent Assurance & Deposit Protection Act — working platform"
+
+# URL mount point (mirrors server.MOUNT) — all generated links get the
+# prefix when the app is deployed under a path, e.g. semptify.org/bill.
+MOUNT = os.environ.get("BILL_MOUNT", "").rstrip("/")
 
 STATUS_WORDS = {
     "queued": "queued for read-in", "read_in": "read in", "held": "held",
@@ -177,7 +182,7 @@ def page(title: str, body: str, ctx: dict,
     stage_cls = " is-stage" if is_stage else ""
     rail = "" if is_stage else _desk_rail(ctx, sublinks)
     doc = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-mount="{MOUNT}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -231,6 +236,12 @@ def page(title: str, body: str, ctx: dict,
 <script src="/static/platform.js"></script>
 </body>
 </html>"""
+    if MOUNT:
+        doc = (doc
+               .replace('href="/', f'href="{MOUNT}/')
+               .replace('action="/', f'action="{MOUNT}/')
+               .replace('src="/', f'src="{MOUNT}/')
+               .replace('content="/', f'content="{MOUNT}/'))
     return doc.encode("utf-8")
 
 

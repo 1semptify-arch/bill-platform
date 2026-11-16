@@ -76,6 +76,11 @@ MODES = ("desk", "tv", "mobile")
 MAX_POST = 64 * 1024
 DEFAULT_PASSCODE = "mn-steward"
 
+# URL mount point for deployment under a path prefix (e.g. "/bill" when
+# served at semptify.org/bill behind the Cloudflare proxy worker).
+# Empty = mounted at root (local dev / onrender direct).
+MOUNT = os.environ.get("BILL_MOUNT", "").rstrip("/")
+
 
 def steward_code() -> str:
     return os.environ.get("BILL_STEWARD_CODE", DEFAULT_PASSCODE)
@@ -131,6 +136,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _redirect(self, location: str,
                   extra: list[tuple[str, str]] | None = None):
+        if (MOUNT and location.startswith("/")
+                and location != MOUNT
+                and not location.startswith(MOUNT + "/")):
+            location = MOUNT + location
         self._send(b"", 303, extra=[("Location", location)] + (extra or []))
 
     def _cookies(self) -> dict[str, str]:
@@ -199,9 +208,24 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- GET ----------
 
+    def _mount_path(self, path: str) -> str | None:
+        """Strip the mount prefix; returns the routed path, or None when
+        the request landed outside the mount (caller redirects into it)."""
+        if not MOUNT:
+            return path
+        if path == MOUNT:
+            return "/"
+        if path.startswith(MOUNT + "/"):
+            return path[len(MOUNT):]
+        return None
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
-        path = url.path.rstrip("/") or "/"
+        raw_path = url.path.rstrip("/") or "/"
+        path = self._mount_path(raw_path)
+        if path is None:
+            self._redirect(MOUNT + raw_path)
+            return
         q = urllib.parse.parse_qs(url.query)
         ctx = self._ctx(path)
 
@@ -413,7 +437,11 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- POST ----------
 
     def do_POST(self):
-        path = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        raw_path = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        path = self._mount_path(raw_path)
+        if path is None:
+            self._redirect(MOUNT + raw_path)
+            return
         form = self._form()
         if form is None:
             self._send(b"bad request", 400, "text/plain; charset=utf-8")

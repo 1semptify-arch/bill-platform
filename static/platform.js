@@ -6,6 +6,9 @@
 (function () {
   "use strict";
 
+  /* URL mount prefix (e.g. "/bill" at semptify.org/bill) — empty at root. */
+  var M = document.documentElement.getAttribute("data-mount") || "";
+
   /* 1. Auto screen mode — follows the viewport live while bp_mode=auto
      (default). Picking Desktop / TV / Mobile pins that mode; "Auto"
      returns control to the viewport. */
@@ -159,7 +162,7 @@
         e.preventDefault();
         next.click();
       } else if (e.key >= "1" && e.key <= "8" && document.body.classList.contains("is-stage")) {
-        window.location.href = "/present?s=" + e.key;
+        window.location.href = M + "/present?s=" + e.key;
       } else if (e.key === "f" || e.key === "F") {
         if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
           document.documentElement.requestFullscreen().catch(function () {});
@@ -167,7 +170,7 @@
           document.exitFullscreen().catch(function () {});
         }
       } else if (e.key === "Escape" || e.key === "t" || e.key === "T") {
-        window.location.href = "/mode/desk?next=/";
+        window.location.href = M + "/mode/desk?next=" + encodeURIComponent(M + "/");
       }
     });
   }

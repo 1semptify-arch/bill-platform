@@ -21,6 +21,10 @@ services:
     # while R2 API tokens (dashboard-only to create) are pending.
     startCommand: mkdir -p data && if [ -n "$LITESTREAM_ACCESS_KEY_ID" ]; then ./litestream-v0.3.13-linux-amd64/litestream restore -if-replica-exists -config litestream.yml ./data/platform.db; exec ./litestream-v0.3.13-linux-amd64/litestream replicate -config litestream.yml -exec "python server.py --host 0.0.0.0"; else exec python server.py --host 0.0.0.0; fi
     envVars:
+      # Mounted under semptify.org/bill via the Cloudflare proxy worker —
+      # all generated links carry the /bill prefix (see views.MOUNT).
+      - key: BILL_MOUNT
+        value: /bill
       - key: BILL_STEWARD_CODE
         sync: false
       - key: R2_BUCKET
