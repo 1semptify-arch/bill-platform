@@ -569,6 +569,12 @@ def main() -> int:
                   and 'data-mount="/bill"' in html)
             st, html = mget("/bill/api/state")
             check("mounted api serves", st == 200 and "clauses" in html)
+            st, html = mget("/bill/research")
+            check("mounted content page /bill/research serves", st == 200
+                  and "rail" in html)
+            st, html = mget("/bill/bill")
+            check("mounted reader /bill/bill serves clauses", st == 200
+                  and "I-1" in html)
             st, hdrs = mraw("/bill/steward/toggle")
             check("mounted steward toggle redirects in mount", st == 303
                   and (hdrs.get("Location") or "").startswith("/bill"))

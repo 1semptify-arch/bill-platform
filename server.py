@@ -409,17 +409,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/your-voice":
             self._redirect("/mark")
             return
-        if path == "/bill/live":
+        if path in ("/bill/live", "/live"):
             self._redirect("/bill")
             return
-        if path == "/what-the-bill-changes":
-            self._send(views.content_page("what-the-bill-changes", ctx)
-                       or views.not_found(ctx))
-            return
-        if path.startswith("/bill/"):
-            slug = path[len("/bill/"):]
-            body = (views.content_page(slug, ctx)
-                    if slug in views.CONTENT_PAGES else None)
+        slug = (path[len("/bill/"):] if path.startswith("/bill/")
+                else path.lstrip("/"))
+        if slug in views.CONTENT_PAGES:
+            body = views.content_page(slug, ctx)
             self._send(body if body else views.not_found(ctx),
                        200 if body else 404)
             return
