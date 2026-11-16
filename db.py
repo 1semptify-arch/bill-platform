@@ -326,8 +326,8 @@ def _seed_supporters(con) -> None:
         " noted_at) VALUES (?,?,?,?,?,?,?)",
         [
             ("Amy Klobuchar", "U.S. Senate (MN)", "U.S. Senator",
-             "endorsed", "MN statewide",
-             "Named supporter — federal visibility ally; the bill itself is state-level.",
+             "target", "MN statewide",
+             "Outreach suggestion — federal visibility ally; the bill itself is state-level.",
              utc_now()),
             ("HOME Line", "HOME Line", "Tenant hotline & advocacy",
              "target", "Statewide", "Already the platform's crisis-routing partner.", utc_now()),
