@@ -757,3 +757,21 @@ the mark form's crisis line now links to the help page.
   transient, cleared on retry. Push 3cc8fe9 confirmed.
 - Selfcheck: SELFCHECK PASS — all routes, 3 modes, toolbars, steward
   gates, boards, and the new content routes.
+
+## 2026-11-16 — Platform deployed to Render
+
+- **Render:** blueprint `exs-dbtoq03l550s738t84g0` → service
+  `bill-platform-5873` (srv-dbtoq1lckfvc7392b8v0, free, oregon).
+  Deploy LIVE on commit 08fb321 — serves at
+  `https://bill-platform-5873.onrender.com`. autoSync on push to main.
+- **Steward:** BILL_STEWARD_CODE set at approve time — remote steward
+  mutations verified 403 without passcode. Code delivered to Brad in
+  session (not stored in repo).
+- **R2:** bucket `bill-platform-db` created via wrangler. Litestream is
+  conditional in startCommand — app boots ephemeral until
+  LITESTREAM_* creds are set (R2 API tokens are dashboard-only to create).
+- **Branded URL:** `edge/` proxy worker `bill-platform-proxy` deployed
+  with route `platform.semptify.org/*` → onrender origin. Route needs
+  one proxied DNS record (platform CNAME → bill-platform-5873.onrender.com)
+  — DNS write scope unavailable via API; single dashboard step.
+- Live checks: /, /margin, /api/state 200; steward POST w/o auth 403.

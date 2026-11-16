@@ -1,0 +1,6 @@
+name = "bill-platform-proxy"
+main = "proxy.js"
+compatibility_date = "2025-01-01"
+routes = [
+  { pattern = "platform.semptify.org/*", zone_name = "semptify.org" }
+]

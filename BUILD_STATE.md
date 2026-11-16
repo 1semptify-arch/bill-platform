@@ -111,3 +111,12 @@ What's live, what's pending. Updated when state changes — not a changelog
 - **SSOT:** canonical bill text still upstream in app-semptify turnbuchalla;
   both renderers derive from it (sync gate + extract_clauses.py).
 - Selfcheck green incl. content routes.
+
+## Live state (2026-11-16)
+
+- **LIVE:** `https://bill-platform-5873.onrender.com` (Render free,
+  oregon, auto-deploys on push to main).
+- **Branded:** `platform.semptify.org` — proxy worker + route deployed;
+  pending one proxied DNS record (CNAME platform → bill-platform-5873.onrender.com).
+- **Persistence:** ephemeral until LITESTREAM_ACCESS_KEY_ID/SECRET set
+  (R2 API token = dashboard-only creation). Bucket ready: bill-platform-db.
