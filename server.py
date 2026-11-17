@@ -94,9 +94,12 @@ def local_onetap_allowed(host_header: str) -> bool:
     return host in {"127.0.0.1", "localhost", "::1", ""}
 
 
-def make_steward_token() -> str:
+def make_steward_token(sid: int = 0) -> str:
+    """Session token bound to a steward id (0 = master code / one-tap)."""
     secret = steward_code().encode("utf-8")
-    return hmac.new(secret, b"bill-platform-steward-v1", hashlib.sha256).hexdigest()[:32]
+    mac = hmac.new(secret, f"bill-platform-steward-v1:{sid}".encode(),
+                   hashlib.sha256).hexdigest()[:32]
+    return f"sw{sid}-{mac}"
 
 
 def _safe_next(raw: str | None, fallback: str = "/") -> str:
@@ -169,20 +172,41 @@ class Handler(BaseHTTPRequestHandler):
         m = self._cookies().get("bp_mode", "auto")
         return m if m in MODES + ("auto",) else "auto"
 
-    def _is_steward(self) -> bool:
+    def _steward(self):
+        """Resolve the acting steward — session cookie or code header.
+        Returns the roster row, a master pseudo-row (id 0), or None."""
+        if hasattr(self, "_sw"):
+            return self._sw
+        self._sw = None
         tok = self._cookies().get("bp_steward", "")
-        if tok and hmac.compare_digest(tok, make_steward_token()):
-            return True
-        hdr = (self.headers.get("X-Steward-Code") or "").strip()
-        if hdr and hmac.compare_digest(hdr, steward_code()):
-            return True
-        return False
+        if tok.startswith("sw") and "-" in tok:
+            sid_s, _, mac = tok[2:].partition("-")
+            try:
+                sid = int(sid_s)
+            except ValueError:
+                sid = -1
+            if sid >= 0 and hmac.compare_digest(
+                    mac, make_steward_token(sid).partition("-")[2]):
+                self._sw = (db.steward_active(sid) if sid
+                            else {"id": 0, "name": None, "role": "master"})
+        if self._sw is None:
+            hdr = (self.headers.get("X-Steward-Code") or "").strip()
+            if hdr:
+                if hmac.compare_digest(hdr, steward_code()):
+                    self._sw = {"id": 0, "name": None, "role": "master"}
+                else:
+                    self._sw = db.steward_by_code(hdr)
+        return self._sw
+
+    def _is_steward(self) -> bool:
+        return self._steward() is not None
 
     def _ctx(self, path: str) -> dict:
         return {
             "mode": self._mode(),
             "path": path,
             "steward": self._is_steward(),
+            "steward_row": self._steward(),
             "onetap": local_onetap_allowed(self.headers.get("Host", "")),
         }
 
@@ -317,7 +341,7 @@ class Handler(BaseHTTPRequestHandler):
                     ("Set-Cookie", "bp_steward=; Path=/; SameSite=Strict; Max-Age=0")])
                 return
             if ctx["onetap"]:
-                tok = make_steward_token()
+                tok = make_steward_token(0)
                 self._redirect(nxt, extra=[
                     ("Set-Cookie",
                      f"bp_steward={tok}; Path=/; SameSite=Strict; HttpOnly; Max-Age=86400")])
@@ -396,7 +420,8 @@ class Handler(BaseHTTPRequestHandler):
             "/editions": lambda: views.editions(ctx),
             "/changes": lambda: views.changes_page(
                 q.get("s", [None])[0], ctx),
-            "/stewards": lambda: views.stewards_page(ctx),
+            "/stewards": lambda: views.stewards_page(
+                q.get("issued", [None])[0], ctx),
             "/search": lambda: views.search_page(q.get("q", [""])[0], ctx),
             "/track": lambda: views.track_page(q.get("code", [""])[0],
                                                q.get("new", [""])[0], ctx),
@@ -453,8 +478,13 @@ class Handler(BaseHTTPRequestHandler):
             onetap_ok = (code == "dev-local" and
                          local_onetap_allowed(self.headers.get("Host", "")))
             code_ok = bool(code) and hmac.compare_digest(code, steward_code())
-            if onetap_ok or code_ok:
-                tok = make_steward_token()
+            sid = 0
+            if not (onetap_ok or code_ok) and code:
+                row = db.steward_by_code(code)
+                if row:
+                    sid = row["id"]
+            if onetap_ok or code_ok or sid:
+                tok = make_steward_token(sid)
                 self._redirect(nxt, extra=[
                     ("Set-Cookie",
                      f"bp_steward={tok}; Path=/; SameSite=Strict; HttpOnly; Max-Age=86400")])
@@ -630,9 +660,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(b"a steward needs a name", 422,
                                "text/plain; charset=utf-8")
                     return
-                db.add_steward(self._one(form, "name", 120),
-                               self._one(form, "role", 120),
-                               self._one(form, "note", 400))
+                code = db.add_steward(self._one(form, "name", 120),
+                                      self._one(form, "role", 120),
+                                      self._one(form, "note", 400))
+                self._redirect("/stewards?issued="
+                               + urllib.parse.quote(code, safe=""))
+                return
             else:
                 try:
                     db.steward_action(int(self._one(form, "id", 20)), act)

@@ -1135,8 +1135,8 @@ answers, and request status updates.</p></header>
 {err_html}
 <form method="post" action="/api/steward" class="stack" style="max-width:26rem">
   <input type="hidden" name="next" value="{esc(nxt)}">
-  <label>Steward passcode
-    <input type="password" name="code" required autofocus placeholder="Enter steward passcode"></label>
+  <label>Steward passcode or personal steward code
+    <input type="password" name="code" required autofocus placeholder="Passcode or your st- code"></label>
   <button class="btn" type="submit">Unlock Steward mode</button>
 </form>
 {onetap}"""
@@ -1345,7 +1345,7 @@ def editions(ctx: dict) -> bytes:
     ], "Change history tools")
 
 
-def stewards_page(ctx: dict) -> bytes:
+def stewards_page(issued: str | None, ctx: dict) -> bytes:
     rows = db.stewards(active_only=True)
     retired = [] if not ctx["steward"] else db.stewards(active_only=False)
     retired = [r for r in retired if not r["active"]]
@@ -1378,6 +1378,14 @@ def stewards_page(ctx: dict) -> bytes:
                 f'value="{r["id"]}"><button name="roster_action" '
                 f'value="restore" class="ghost">restore</button></form>'
                 for r in retired) + '</p>')
+    issued_banner = ""
+    if issued and ctx["steward"]:
+        issued_banner = (
+            '<div class="notice-ok" role="status"><b>Steward code issued.</b> '
+            'Pass it to them now — it unlocks steward mode at '
+            '<a href="/steward">/steward</a> and is shown only once: '
+            f'<code>{esc(issued)}</code>. Retiring them from the roster '
+            'revokes it.</div>')
     body = f"""
 <header class="mast"><h1>The stewards</h1>
 <p class="lede">The people who read intake into the public record, moderate
@@ -1386,6 +1394,7 @@ steward names publish on this platform, and only with consent.</b>
 While the platform gets rolling, stewards are chosen by the bill's authors —
 the goal is a standing committee that owns resolutions together. Retired
 stewards stay in the record, not erased.</p></header>
+{issued_banner}
 {add_form}
 {cards or '<p class="quiet">The committee is forming — no stewards named yet.</p>'}"""
     return page("Stewards", body, ctx, [
@@ -1396,7 +1405,8 @@ stewards stay in the record, not erased.</p></header>
     ], "Stewards")
 
 
-def _change_html(ch: dict, steward: bool = False) -> str:
+def _change_html(ch: dict, steward: bool = False,
+                 sname: str | None = None) -> str:
     src = (f' · re: <b>{esc(ch["mark_no"])}</b>' if ch["mark_no"] else "")
     ed = (f' · edition <b>{esc(ch["edition"])}</b>' if ch["edition"] else "")
     by = (f' · resolved by <b>{esc(ch["resolved_by"])}</b>'
@@ -1446,7 +1456,7 @@ def _change_html(ch: dict, steward: bool = False) -> str:
   <form method="post" action="/api/change_status" class="stack">
     <input type="hidden" name="id" value="{ch['id']}">
     <div class="row"><input name="edition" placeholder="Edition ref (e.g. E-10)" maxlength="20">
-    <input name="resolved_by" placeholder="Your name (published — blank stays unnamed)" maxlength="120"></div>
+    <input name="resolved_by" value="{esc(sname or '')}" placeholder="Your name (published — blank stays unnamed)" maxlength="120"></div>
     <input name="note" placeholder="Public reason — required, it is the record" maxlength="500" required>
     <textarea name="new_text" rows="2" placeholder="Statute text as incorporated (optional)"></textarea>
     <div class="row"><button name="action" value="incorporated">Incorporate</button>
@@ -1514,7 +1524,10 @@ authority. Nothing is deleted, only resolved.
 <b>Newest activity first.</b></p></header>
 {pills_html}
 {record_form}
-{"".join(_change_html(ch, ctx["steward"]) for ch in rows) or
+{"".join(_change_html(ch, ctx["steward"],
+                      ctx["steward_row"]["name"]
+                      if ctx["steward_row"] else None)
+         for ch in rows) or
  '<p class="quiet">No changes recorded yet.</p>'}"""
     return page("Changes", body, ctx, [
         ("The draft", "/bill", "primary"),

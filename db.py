@@ -20,6 +20,7 @@ Python 3.11, stdlib only.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import sqlite3
@@ -176,6 +177,7 @@ CREATE TABLE IF NOT EXISTS stewards (
     name        TEXT NOT NULL,             -- published with consent
     role        TEXT,                      -- e.g. "lead steward", "intake"
     note        TEXT,
+    code_hash   TEXT,                      -- sha256 of the issued code, not the code
     active      INTEGER NOT NULL DEFAULT 1,
     added_at    TEXT NOT NULL,
     retired_at  TEXT                       -- roster is a record, not a delete
@@ -321,6 +323,7 @@ def init(path: Path | None = None) -> None:
                                       "edit_note TEXT", "body_original TEXT",
                                       "change_id INTEGER REFERENCES changes(id)"],
                             "requests": ["receipt TEXT"],
+                            "stewards": ["code_hash TEXT"],
                             "changes": ["closes_at TEXT",
                                         "resolved_by TEXT"]}.items():
             have_cols = {r["name"] for r in con.execute(
@@ -923,15 +926,39 @@ def stewards(active_only: bool = True) -> list[sqlite3.Row]:
         return con.execute(q).fetchall()
 
 
+def _code_hash(code: str) -> str:
+    return hashlib.sha256((code + "|bp-steward").encode()).hexdigest()
+
+
 def add_steward(name: str, role: str | None = None,
-                note: str | None = None) -> int:
+                note: str | None = None) -> str:
+    """Adds to the roster and returns the one-time steward code —
+    the db stores only its hash."""
+    code = "st-" + secrets.token_hex(4)
     with connect() as con:
-        cur = con.execute(
-            "INSERT INTO stewards (name, role, note, added_at)"
-            " VALUES (?,?,?,?)",
+        con.execute(
+            "INSERT INTO stewards (name, role, note, code_hash, added_at)"
+            " VALUES (?,?,?,?,?)",
             ((name or "").strip(), (role or "").strip() or None,
-             (note or "").strip() or None, utc_now()))
-        return cur.lastrowid
+             (note or "").strip() or None, _code_hash(code), utc_now()))
+        return code
+
+
+def steward_by_code(code: str) -> sqlite3.Row | None:
+    """Resolve an issued code to an ACTIVE steward row."""
+    if not code:
+        return None
+    with connect() as con:
+        return con.execute(
+            "SELECT * FROM stewards WHERE code_hash = ? AND active = 1",
+            (_code_hash(code.strip()),)).fetchone()
+
+
+def steward_active(steward_id: int) -> sqlite3.Row | None:
+    with connect() as con:
+        return con.execute(
+            "SELECT * FROM stewards WHERE id = ? AND active = 1",
+            (steward_id,)).fetchone()
 
 
 def steward_action(steward_id: int, action: str) -> bool:

@@ -891,3 +891,15 @@ the mark form's crisis line now links to the help page.
   resolutions together. Voting thresholds / per-steward identity deferred
   until the committee is real.
 - Steward-gated /api/steward_roster: add | retire | restore. Selfcheck 4d.
+
+## 2026-11-17 — Per-steward codes
+
+- Roster add issues a one-time code (st-XXXXXXXX); only sha256 hash stored.
+- /api/steward accepts master passcode OR a personal code; session cookie
+  is sw{id}-{hmac} bound to the steward. Retiring the roster row revokes
+  the code (active check on every gated request).
+- Resolution form prefills resolved_by with the signed-in steward's roster
+  name — consent already on the record; blank still allowed.
+- X-Steward-Code header accepts personal codes for API-style calls.
+- Selfcheck 4e: code issuance, one-time display, personal unlock, name
+  prefill, retired-code rejection. SELFCHECK PASS.

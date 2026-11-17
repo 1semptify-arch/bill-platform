@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -426,6 +427,36 @@ def main() -> int:
         st, html, _ = get("/stewards")
         check("steward added to public roster", st == 200
               and "Test Steward" in html and "resolutions" in html)
+        # ---- 4e. Per-steward codes ------------------------------------
+        st, hdrs = post("/api/steward_roster",
+                        {"roster_action": "add", "name": "Coded Steward"},
+                        cookie=steward_cookie)
+        loc = hdrs.get("Location", "")
+        m_code = re.search(r"issued=(st-\w+)", loc)
+        code = m_code.group(1) if m_code else ""
+        check("roster add issues a one-time code", st == 303
+              and code.startswith("st-"))
+        st, html, _ = get("/stewards?issued=" + code,
+                          cookie=steward_cookie)
+        check("issued code shown once on roster page", code in html)
+
+        # personal code unlocks steward mode bound to that steward
+        st, hdrs = post("/api/steward", {"code": code, "next": "/changes"})
+        scode = (hdrs.get("Set-Cookie") or "")
+        check("personal code unlock -> session cookie", st == 303
+              and "sw" in scode and "bp_steward" in scode)
+        pers_cookie = scode.split(";")[0].split("=", 1)[1]
+        st, html, _ = get("/changes", cookie="bp_steward=" + pers_cookie)
+        check("resolution form prefills steward name",
+              'value="Coded Steward"' in html)
+
+        # retiring revokes the code
+        st, _ = post("/api/steward_roster",
+                     {"roster_action": "retire", "id": "2"},
+                     cookie=steward_cookie)
+        st, _ = post("/api/steward", {"code": code, "next": "/changes"})
+        check("retired steward code rejected", st == 403)
+
         st, _ = post("/api/steward_roster",
                      {"roster_action": "retire", "id": "1"},
                      cookie=steward_cookie)
