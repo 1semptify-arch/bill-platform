@@ -835,3 +835,18 @@ the mark form's crisis line now links to the help page.
   text changes; that approval workflow is still being designed.
 - Selfcheck 4c: redact lifecycle, edit lifecycle, original stays dark,
   harsh criticism publishes unedited, unauth redact -> 403. PASS.
+
+## 2026-11-17 — R2 persistence LIVE (driven via Devin Browser)
+
+- Token created in dashboard via CDP-driven Edge: bill-platform-litestream,
+  Account API token, Object R&W, scoped to bill-platform-db only, Forever TTL.
+- Render env set via API: LITESTREAM_ACCESS_KEY_ID + SECRET + R2_BUCKET +
+  R2_ENDPOINT. Secret never left the machine (chat->Render env only).
+- First deploy FAILED (127): tar extracts litestream binary flat at root,
+  startCommand expected litestream-v0.3.13-linux-amd64/litestream subfolder.
+  Fixed path -> ./litestream (commit 7ad66cd).
+- Verified in Render logs: restore found empty bucket (fresh start), new
+  generation b680cfcff26f025d, snapshot written 25KB, WAL segments writing
+  every sync interval. Persistence is real: redeploys now restore the ledger.
+- Note: 2 pre-existing "R2 Account Token" entries (Admin R&W, all buckets,
+  Sep 28-29) remain in the dashboard — unused, over-broad, review for cleanup.

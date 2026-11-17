@@ -118,7 +118,7 @@ What's live, what's pending. Updated when state changes — not a changelog
   oregon, auto-deploys on push to main).
 - **Branded:** `platform.semptify.org` — proxy worker + route deployed;
   pending one proxied DNS record (CNAME platform → bill-platform-5873.onrender.com).
-- **Persistence:** ephemeral until LITESTREAM_ACCESS_KEY_ID/SECRET set
+- **Persistence:** ACTIVE — Litestream replicating to R2 (verified 2026-11-17).
   (R2 API token = dashboard-only creation). Bucket ready: bill-platform-db.
 
 ## Public address (2026-11-16)
