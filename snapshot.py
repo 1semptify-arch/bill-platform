@@ -14,8 +14,12 @@ work offline, by design (it's for reference, not a second platform).
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import subprocess
 import sys
+import tempfile
+import time
 import urllib.request
 from pathlib import Path
 
@@ -94,13 +98,7 @@ def fetch(base: str, route: str) -> bytes | None:
     return None
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=8093)
-    ap.add_argument("--host", default="127.0.0.1")
-    args = ap.parse_args()
-    base = f"http://{args.host}:{args.port}"
-
+def local(base: str) -> int:
     (OUT / "static").mkdir(parents=True, exist_ok=True)
     ok = fail = 0
     for route in PAGES:
@@ -123,6 +121,103 @@ def main() -> int:
         encoding="utf-8")
     print(f"snapshot: {ok} pages -> {OUT}  ({fail} failed)")
     return 0 if fail == 0 else 1
+
+
+# ---------- deploy snapshot: platform pages -> site/bill/ --------------
+# The edge proxy serves these files for read-paths (100% Cloudflare,
+# zero origin hours). Live paths — margin, sign, boards, api, POSTs —
+# still proxy to Render. Links stay as /bill/... (production URLs).
+
+DEPLOY_OUT = HERE / "site" / "bill"
+
+# Static read surface (GET only). Everything else falls through to origin.
+DEPLOY_PAGES = [
+    "/", "/desk", "/bill", "/teach", "/calculator", "/help", "/legal",
+    "/research", "/history", "/providers", "/brief", "/classroom",
+    "/press", "/myths", "/what-the-bill-changes",
+]
+DEPLOY_PAGES += [f"/clause/{r['id']}" for r in db.clauses()]
+DEPLOY_PAGES += [f"/present?s={i}" for i in range(1, 9)]
+
+
+def deploy_file(route: str) -> str:
+    """Mounted route -> path under site/bill/ (mirrors URL structure)."""
+    path, _, query = route.lstrip("/").partition("?")
+    if not path:
+        return "index.html"
+    if query:
+        m = re.search(r"(?:^|&)s=(\d+)", query)
+        if m:
+            path += f"-s{m.group(1)}"
+    return path + ".html"
+
+
+def deploy() -> int:
+    port = 18094
+    tmp = Path(tempfile.mkdtemp(prefix="bp_deploysnap_"))
+    env = {**os.environ, "BILL_MOUNT": "/bill",
+           "PLATFORM_DB": str(tmp / "deploy.db")}
+    proc = subprocess.Popen(
+        [sys.executable, str(HERE / "server.py"), "--port", str(port)],
+        cwd=HERE, env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    base = f"http://127.0.0.1:{port}/bill"
+    try:
+        for _ in range(40):
+            try:
+                urllib.request.urlopen(base + "/", timeout=1)
+                break
+            except Exception:
+                time.sleep(0.25)
+
+        DEPLOY_OUT.mkdir(parents=True, exist_ok=True)
+        ok = fail = 0
+        for route in DEPLOY_PAGES:
+            tv = route.startswith("/present") or route == "/tv"
+            req = urllib.request.Request(base + route)
+            if tv:
+                req.add_header("Cookie", "bp_mode=tv")
+            try:
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    raw = r.read() if r.status == 200 else None
+            except Exception as e:
+                print(f"  !! {route}: {e}")
+                raw = None
+            if raw is None:
+                fail += 1
+                continue
+            out = DEPLOY_OUT / deploy_file(route)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(raw)
+            ok += 1
+
+        for a in STATIC:
+            req = urllib.request.Request(f"{base}/static/{a}")
+            try:
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    out = DEPLOY_OUT / "static" / a
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    out.write_bytes(r.read())
+            except Exception as e:
+                print(f"  !! /static/{a}: {e}")
+                fail += 1
+        print(f"deploy snapshot: {ok} pages -> {DEPLOY_OUT}  ({fail} failed)")
+        return 0 if fail == 0 else 1
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--deploy", action="store_true",
+                    help="emit production-path snapshot into site/bill/")
+    ap.add_argument("--port", type=int, default=8093)
+    ap.add_argument("--host", default="127.0.0.1")
+    args = ap.parse_args()
+    if args.deploy:
+        return deploy()
+    return local(f"http://{args.host}:{args.port}")
 
 
 if __name__ == "__main__":

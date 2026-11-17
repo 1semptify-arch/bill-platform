@@ -1,17 +1,14 @@
 name = "bill-platform-proxy"
 main = "proxy.js"
 compatibility_date = "2025-01-01"
-# Zone routes are managed via API/dashboard — production bindings:
+# Zone routes managed via API/dashboard — production bindings:
 #   platform.semptify.org          (custom domain, auto-DNS)
-#   semptify.org/bill*             (repointed from bill-mirror)
-#   www.semptify.org/bill*         (repointed from bill-mirror)
-#   semptify.org/your-voice*       (repointed from bill-mirror)
-#   www.semptify.org/your-voice*   (repointed from bill-mirror)
-#   semptify.org/what-the-bill-changes*   (+www, repointed)
+#   semptify.org/bill*             (+www)
+#   semptify.org/your-voice*       (+www)
+#   semptify.org/what-the-bill-changes*   (+www)
 # bill-mirror keeps: /, /static/*, /gen-image* (main Semptify site).
+# No cron: Render free tier sleeps when idle — reads are served from
+# the GitHub snapshot, only live-path hits wake the origin.
 routes = [
   { pattern = "platform.semptify.org", zone_name = "semptify.org", custom_domain = true }
 ]
-
-[triggers]
-crons = ["*/14 * * * *"]
