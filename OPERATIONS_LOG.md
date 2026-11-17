@@ -850,3 +850,18 @@ the mark form's crisis line now links to the help page.
   every sync interval. Persistence is real: redeploys now restore the ledger.
 - Note: 2 pre-existing "R2 Account Token" entries (Admin R&W, all buckets,
   Sep 28-29) remain in the dashboard — unused, over-broad, review for cleanup.
+
+## 2026-11-17 — R2 token cleanup (least-privilege posture complete)
+
+- Deleted both legacy "R2 Account Token" entries (Admin R&W, all buckets,
+  Sep 28 + Sep 29). Verified via v4 API list: only bill-platform-litestream
+  remains R2-scoped.
+- Wrinkle: the Sep-28 row was a phantom/legacy record — the dashboard's
+  DELETE call 404'd every time because the ID isn't in the v4 token store.
+  Deleting the real Sep-29 token via direct v4 API DELETE removed both rows.
+- Also surfaced: "Cache & Dev Mode" account token (June, broad account
+  write perms) — NOT R2, lives under Profile > API Tokens. Reviewed with
+  Brad; left in place deliberately.
+- Drive note: dashboard menus/dialogs die when the CDP connection drops
+  between calls — drive.js now has a `run` command keeping one session
+  alive for multi-step flows.
