@@ -131,3 +131,15 @@ What's live, what's pending. Updated when state changes — not a changelog
   dormant but deployed — re-point routes to roll back).
 - Render: BILL_MOUNT=/bill + BILL_STEWARD_CODE set; R2 litestream
   dormant pending dashboard-created API token.
+
+## Serving split (2026-11-16)
+
+- **Reads:** site/bill/ snapshot via GitHub raw + CF edge cache (300s).
+  Snapshot pages: /bill/, desk, bill reader, clause/*, content pages,
+  teach, calculator, help, legal, present slides.
+- **Live:** margin, requests, changes, campaign, sign, positions,
+  decisions, editions, claims, intake, track, search, packet, mark,
+  steward, mode, api — all proxy to Render.
+- **Render hours:** ~0 while idle (sleeps; only live-path traffic wakes).
+  Shared free-tier budget with Semptify/septify-pi is safe.
+- **Republish reads:** python snapshot.py --deploy && git push.

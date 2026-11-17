@@ -47,7 +47,7 @@ export default {
 
     if (isStatic) {
       const file = snapFile(path, u.search);
-      const r = await fetch(SNAP + file + '?v=' + Date.now(),
+      const r = await fetch(SNAP + file + '?v=1',
                             { cf: { cacheTtl: 300, cacheEverything: true } });
       if (r.ok) {
         const ext = file.split('.').pop();

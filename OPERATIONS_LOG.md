@@ -794,3 +794,22 @@ the mark form's crisis line now links to the help page.
   /bill/brief, /bill/myths, /bill/history, /bill/desk all 200;
   /bill/live 303→reader. data-mount + prefixed links confirmed.
 - Selfcheck +7 mounted-mode checks (subprocess instance, BILL_MOUNT set).
+
+## 2026-11-16 — Edge snapshot split: Cloudflare-first, near-zero Render hours
+
+- **Why:** Render free tier shares a monthly hour budget across the
+  workspace (bill-platform + Semptify + septify-pi). Keep-warm cron
+  pinning 24/7 would burn ~720h and risk suspensions. Public read must
+  be 100% on with zero spend — the original CF-worker-from-GitHub model.
+- **Split (proxy.js v3):** GET reads on publishable paths → GitHub raw
+  `site/bill/*` snapshot (x-bp-source: snapshot). Ledger/boards/API/
+  POSTs/steward/non-auto modes → Render origin (x-bp-source: live).
+- **snapshot.py --deploy** — spawns mounted instance (BILL_MOUNT=/bill,
+  throwaway PLATFORM_DB), writes 46 pages + assets to site/bill/ with
+  production /bill/ links intact. Republish: snapshot --deploy + push.
+- Keep-warm cron removed — Render sleeps when idle; reads never wake it.
+- Verified live: /bill/ /desk /research /clause/I-1 → snapshot;
+  /margin /sign → live; POST /api/mark → 303 → /bill/track receipt;
+  bp_steward cookie bypasses snapshot to live.
+- Frozen counts on snapshot pages (desk/index/mcount badges) reflect
+  publish time — republish refreshes. Live values always on origin paths.
