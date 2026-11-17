@@ -499,7 +499,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path in ("/api/mark", "/api/request", "/api/sign"):
-            if form.get("website"):  # honeypot — only bots fill it
+            # honeypot — only bots fill it. Must read the VALUE, not the
+            # key: parse_qs(keep_blank_values=True) yields [""] for an
+            # empty field, and a non-empty list is truthy — form.get()
+            # alone would discard every legitimate submission.
+            if self._one(form, "website"):
                 self._redirect("/margin")
                 return
             if not self._rate_ok():
