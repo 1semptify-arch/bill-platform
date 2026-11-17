@@ -47,14 +47,24 @@ Notes:
 
 ## How moderation runs today
 
-- Intended path: `/admin/public-voice` → publish / answer / decline /
-  unpublish. (Admin lane is currently excluded from the `render_mvp`
-  production build — see OPERATIONS_LOG.)
-- Interim path until the admin lane ships: direct `voice_posts` update in
-  the Neon `semptifty_db` database — `status` + `is_published` per the
-  decision table. The public API (`GET /api/voice-posts`) reads
-  `is_published`; `awaiting_review` counts unpublished rows including
-  declined ones (known cosmetic bug).
+This repo's moderation surface is the Margin (`marks` table). Controls
+live in two places — `/intake` (queued, pre-publication triage) and the
+steward moderation form on each published mark in `/margin`:
+
+| Control | Mechanic |
+|---|---|
+| `read_in` | Publishes: assigns an M-number, optional public answer alongside |
+| `redact` | Clears the `author_label` and `contact` columns — removed, not hidden. Mark stays, shows "name withheld by stewards". For posts carrying names, addresses, or identifying info. |
+| `edit` | Replaces `body`; original preserved steward-side in `body_original`; public page shows "(edited by stewards — reason)". For advertising, hate language, spam. **Never for criticism of the bill.** |
+| `held` | Stays dark, off the public margin |
+| `retract` | Visible strike-through with a public note — the record stays |
+| `crisis_routed` | Housing-emergency routing per the HOME Line path |
+
+Queued submissions that are pure spam/hate with nothing worth keeping
+can simply be held or left queued — `edit`/`redact` exist for content
+that has substance worth publishing. Signatures have their own
+consent-gated publish path (`/sign` → `held`/`published`).
+
 - Every moderation action should be deliberate and logged here or in
   OPERATIONS_LOG — no silent deletes.
 

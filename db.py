@@ -110,7 +110,12 @@ CREATE TABLE IF NOT EXISTS marks (
     read_in_at     TEXT,
     receipt        TEXT,                   -- submitter's status-lookup code
     retracted_at   TEXT,                   -- public correction, never deleted
-    retract_note   TEXT
+    retract_note   TEXT,
+    redacted_at    TEXT,                   -- name/contact removed by stewards
+    redact_note    TEXT,
+    edited_at      TEXT,                   -- body replaced by stewards
+    edit_note      TEXT,                   -- public reason ("advertising removed")
+    body_original  TEXT                    -- pre-edit body, steward-only record
 );
 CREATE TABLE IF NOT EXISTS requests (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -297,7 +302,9 @@ def init(path: Path | None = None) -> None:
         # Migrate older DBs forward — CHECK constraints can't be altered,
         # so retract uses a timestamp column, not a status value.
         for table, cols in {"marks": ["receipt TEXT", "retracted_at TEXT",
-                                      "retract_note TEXT"],
+                                      "retract_note TEXT", "redacted_at TEXT",
+                                      "redact_note TEXT", "edited_at TEXT",
+                                      "edit_note TEXT", "body_original TEXT"],
                             "requests": ["receipt TEXT"]}.items():
             have_cols = {r["name"] for r in con.execute(
                 f"PRAGMA table_info({table})").fetchall()}
@@ -639,6 +646,42 @@ def mark_retract(mark_id: int, note: str | None = None) -> bool:
             " WHERE id = ? AND status = 'read_in' AND retracted_at IS NULL",
             (utc_now(), (note or "").strip() or None, mark_id))
         return cur.rowcount > 0
+
+
+def mark_redact(mark_id: int, note: str | None = None) -> str | None:
+    """Remove name + contact from a mark — the columns are cleared, not
+    hidden (redaction means gone). The mark itself stays, per MODERATION.md:
+    strip the details, publish the rest. Returns the mark's status."""
+    with connect() as con:
+        row = con.execute("SELECT status FROM marks WHERE id = ?",
+                          (mark_id,)).fetchone()
+        if not row:
+            return None
+        con.execute(
+            "UPDATE marks SET author_label = NULL, contact = NULL,"
+            " redacted_at = ?, redact_note = ? WHERE id = ?",
+            (utc_now(), (note or "").strip() or None, mark_id))
+        return row["status"]
+
+
+def mark_edit(mark_id: int, new_body: str, note: str | None = None) -> str | None:
+    """Replace a mark's body (advertising, hate, etc. per MODERATION.md —
+    never for criticizing the bill). Original moves to body_original for
+    steward-side accountability; the edit is noted publicly. Returns the
+    mark's status."""
+    new_body = (new_body or "").strip()
+    if not new_body:
+        return None
+    with connect() as con:
+        row = con.execute("SELECT status FROM marks WHERE id = ?",
+                          (mark_id,)).fetchone()
+        if not row:
+            return None
+        con.execute(
+            "UPDATE marks SET body_original = COALESCE(body_original, body),"
+            " body = ?, edited_at = ?, edit_note = ? WHERE id = ?",
+            (new_body, utc_now(), (note or "").strip() or None, mark_id))
+        return row["status"]
 
 
 def by_receipt(code: str) -> dict | None:

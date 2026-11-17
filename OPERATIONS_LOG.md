@@ -813,3 +813,25 @@ the mark form's crisis line now links to the help page.
   bp_steward cookie bypasses snapshot to live.
 - Frozen counts on snapshot pages (desk/index/mcount badges) reflect
   publish time — republish refreshes. Live values always on origin paths.
+
+## 2026-11-17 — Moderation mechanics shipped (redact + edit)
+
+- **Policy was already written** (MODERATION.md, from the mirror repo):
+  "moderation protects people, never protects the bill from criticism."
+  Missing piece was mechanics — stewards could only publish-all or
+  decline-all, no way to "strip details, publish the rest" (Polis rule).
+- **New steward actions on /api/mark_action:**
+  - `redact` — clears author_label + contact columns (removed, not
+    hidden); public shows "name withheld by stewards"; mark stays up.
+  - `edit` — replaces body for ads/hate/spam; original preserved
+    steward-side in body_original (export only); public shows
+    "(edited by stewards — reason)". Never for criticism of substance.
+  - UI: moderation form on each published margin mark + fields in the
+    /intake triage form. `back` field keeps steward on their page.
+- **Leak found + fixed:** /api/state SELECT * leaked body_original into
+  public JSON — added to the sanitize pops alongside contact/receipt.
+- **Scope corrected in AGENTS.md:** platform DOES collect contributor
+  data (marks, contacts, optional signatures) to evaluate/approve bill
+  text changes; that approval workflow is still being designed.
+- Selfcheck 4c: redact lifecycle, edit lifecycle, original stays dark,
+  harsh criticism publishes unedited, unauth redact -> 403. PASS.

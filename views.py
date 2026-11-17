@@ -272,7 +272,14 @@ def _mark_html(m, show_answer_link: bool = True, steward: bool = False) -> str:
               f'{"&c=" + esc(m["clause_id"]) if m["clause_id"] else ""}">'
               f'answer by reference</a></p>' if show_answer_link else "")
     kind = KIND_WORDS.get(m["kind"], "comment")
-    author = f' · {esc(m["author_label"])}' if m["author_label"] else " · unsigned"
+    if m["redacted_at"]:
+        author = ' · <span class="quiet">name withheld by stewards</span>'
+    else:
+        author = (f' · {esc(m["author_label"])}' if m["author_label"]
+                  else " · unsigned")
+    edited = (f' <span class="quiet">(edited by stewards'
+              f'{(" — " + esc(m["edit_note"])) if m["edit_note"] else ""})'
+              f'</span>' if m["edited_at"] else "")
     no = m["public_no"] or "#" + str(m["id"])
     plink = (f' <a class="plink" href="/margin#{esc(m["public_no"])}" '
              f'title="Link to this mark">#</a>' if m["public_no"] else "")
@@ -283,20 +290,24 @@ def _mark_html(m, show_answer_link: bool = True, steward: bool = False) -> str:
         return (f'<article class="mark retracted" id="{esc(no)}">'
                 f'<p class="mno"><b>{esc(no)}</b>{plink} {retract}</p>'
                 f'<p><del>{esc(m["body"])}</del></p></article>')
-    retract_form = ""
+    mod_form = ""
     if steward and m["public_no"]:
-        retract_form = f'''
+        mod_form = f'''
   <form method="post" action="/api/mark_action" class="stack mact">
     <input type="hidden" name="id" value="{m["id"]}">
-    <input name="response" placeholder="Retraction note" maxlength="500">
+    <input type="hidden" name="back" value="/margin">
+    <input name="note" placeholder="Moderation note (public on redact/edit)" maxlength="500">
+    <input name="new_body" placeholder="Replacement text (Edit only)">
     <button name="action" value="retract" class="ghost">Retract</button>
+    <button name="action" value="redact" class="ghost">Redact name</button>
+    <button name="action" value="edit" class="ghost">Edit text</button>
   </form>'''
     return (f'<article class="mark" id="{esc(no)}">'
             f'<p class="mno"><b>{esc(no)}</b>{plink}'
             f' · {esc(m["read_in_at"] or m["created_at"])} · {kind} · '
             f'{_clause_label(m["clause_id"])}{author}{_reline(m)}</p>'
-            f'{quote}{proposed}<p>{esc(m["body"])}</p>{response}{answer}'
-            f'{retract_form}</article>')
+            f'{quote}{proposed}<p>{esc(m["body"])}{edited}</p>{response}{answer}'
+            f'{mod_form}</article>')
 
 
 def _mark_form(cid: str | None, re_no: str | None,
@@ -1065,14 +1076,23 @@ accidental personal details, spam, and housing emergencies hitting a comment box
   <p>{esc(m['body'])}</p>
   <form method="post" action="/api/mark_action" class="stack">
     <input type="hidden" name="id" value="{m['id']}">
+    <input type="hidden" name="back" value="/intake">
     <div class="row">
       <label>Answer in the open <span class="quiet">(optional — publishes alongside mark)</span>
         <input name="response" placeholder="The drafting table's public answer."></label>
       <label>Responder role
         <input name="responder" value="Drafting Table"></label>
     </div>
+    <div class="row">
+      <label>Moderation note <span class="quiet">(public reason on redact/edit)</span>
+        <input name="note" maxlength="500"></label>
+      <label>Replacement text <span class="quiet">(Edit only)</span>
+        <input name="new_body"></label>
+    </div>
     <div class="acts">
       <button name="action" value="read_in" class="btn">Read in (assign M-number)</button>
+      <button name="action" value="redact" class="btn ghost">Redact name/contact</button>
+      <button name="action" value="edit" class="btn ghost">Edit text</button>
       <button name="action" value="held" class="btn ghost">Hold</button>
       <button name="action" value="crisis_routed" class="btn ghost">Crisis route</button>
     </div>

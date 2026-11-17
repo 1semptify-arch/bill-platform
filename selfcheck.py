@@ -278,6 +278,57 @@ def main() -> int:
         st, html, _ = get("/margin")
         check("reply cites by reference", "M-0005" in html and "M-0006" in html)
 
+        # ---- 4c. Moderation: redact PII, edit abuse, protect criticism --
+        st, _ = post("/api/mark", {
+            "clause_id": "II-3",
+            "body": "This bill is wrong on the math, full stop. Call me.",
+            "name": "Jane Critic", "contact": "jane@example.org"})
+        mod_id = newest_queued_mark_id()
+        st, _ = post("/api/mark_action", {"id": mod_id, "action": "read_in"},
+                     cookie=steward_cookie)
+        st, html, _ = get("/margin")
+        check("critical mark publishes with name", "Jane Critic" in html
+              and "wrong on the math" in html)
+
+        st, _ = post("/api/mark_action", {"id": mod_id, "action": "redact"})
+        check("unauthenticated redact -> 403", st == 403)
+
+        st, _ = post("/api/mark_action", {
+            "id": mod_id, "action": "redact", "back": "/margin"},
+            cookie=steward_cookie)
+        check("steward redact -> redirect", st == 303)
+        st, html, _ = get("/margin")
+        check("redacted mark shows 'name withheld'",
+              "name withheld by stewards" in html
+              and "Jane Critic" not in html
+              and "wrong on the math" in html)
+        st, html, _ = get("/intake", cookie=steward_cookie)
+        check("redacted contact gone steward-side too",
+              "jane@example.org" not in html)
+
+        st, _ = post("/api/mark_action", {
+            "id": mod_id, "action": "edit", "back": "/margin",
+            "new_body": "This bill is wrong on the math, full stop.",
+            "note": "contact info stripped"}, cookie=steward_cookie)
+        st, html, _ = get("/margin")
+        check("edited mark shows steward edit + public reason",
+              "edited by stewards" in html
+              and "contact info stripped" in html
+              and "Call me" not in html)
+        st, st_data, _ = get("/api/state")
+        check("edited body in public state; original stays steward-side",
+              "Call me" not in st_data and "edited by stewards" not in st_data)
+
+        # Criticism of substance is protected — a harsh mark publishes intact
+        st, _ = post("/api/mark", {
+            "body": "This clause is a scam and the drafters know it."})
+        crit_id = newest_queued_mark_id()
+        st, _ = post("/api/mark_action", {"id": crit_id, "action": "read_in"},
+                     cookie=steward_cookie)
+        st, html, _ = get("/margin")
+        check("harsh criticism publishes unedited",
+              "a scam and the drafters know it" in html)
+
         # Crisis routing keeps personal emergency off public ledger
         st, _ = post("/api/mark", {"body": "emergency eviction tomorrow help"})
         cid = newest_queued_mark_id()

@@ -246,6 +246,7 @@ class Handler(BaseHTTPRequestHandler):
                 d = dict(r)
                 d.pop("contact", None)
                 d.pop("receipt", None)
+                d.pop("body_original", None)
                 safe_marks.append(d)
             safe_reqs = []
             for r in db.requests():
@@ -495,14 +496,20 @@ class Handler(BaseHTTPRequestHandler):
                 mid = int(self._one(form, "id", 20))
             except ValueError:
                 mid = 0
-            if self._one(form, "action", 20) == "retract":
-                db.mark_retract(mid, self._one(form, "response", 500) or None)
-                self._redirect("/margin")
-                return
-            db.mark_action(mid, self._one(form, "action", 20),
-                           self._one(form, "response"),
-                           self._one(form, "responder", 80) or None)
-            self._redirect("/intake")
+            act = self._one(form, "action", 20)
+            back = _safe_next(self._one(form, "back", 60), "/intake")
+            note = (self._one(form, "note", 500)
+                    or self._one(form, "response", 500) or None)
+            if act == "retract":
+                db.mark_retract(mid, note)
+            elif act == "redact":
+                db.mark_redact(mid, note)
+            elif act == "edit":
+                db.mark_edit(mid, self._one(form, "new_body", 4000), note)
+            else:
+                db.mark_action(mid, act, self._one(form, "response"),
+                               self._one(form, "responder", 80) or None)
+            self._redirect(back)
             return
 
         if path == "/api/request":
