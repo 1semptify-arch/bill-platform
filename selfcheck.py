@@ -359,8 +359,15 @@ def main() -> int:
         st, _ = post("/api/change_status", {"id": 1, "action": "incorporated"})
         check("unauthenticated POST /api/change_status -> 403", st == 403)
 
+        st, _ = post("/api/change_status", {
+            "id": 1, "action": "incorporated", "edition": "E-10"},
+            cookie=steward_cookie)
+        check("resolve without public reason -> 422", st == 422)
+
         pst, _ = post("/api/change_status", {
             "id": 1, "action": "incorporated", "edition": "E-10",
+            "note": "Closes the assignee loophole; discussion record clean.",
+            "resolved_by": "Steward A. Test",
             "new_text": "A claim paid from the pool or escrow is final and is"
                         " not recoverable from the tenant or any successor."},
             cookie=steward_cookie)
@@ -369,6 +376,8 @@ def main() -> int:
               and "E-10" in html and "incorporated" in html
               and "any successor" in html)
         check("diff keeps old text visible", "Was:" in html and "Now:" in html)
+        check("consent-named steward on the record",
+              "resolved by <b>Steward A. Test</b>" in html)
 
         st, _ = post("/api/change", {
             "clause_id": "II-1", "proposed_text": "Extend coverage term to 9 months",
@@ -376,6 +385,36 @@ def main() -> int:
         st, html, _ = get("/changes")
         check("steward manual change record -> CH-0002", "CH-0002" in html
               and "Extend coverage term" in html)
+
+        # ---- 4c. Open-window discussion on a proposal ------------------
+        # Named contributor weighs in on CH-0002 (id=2) — name stays
+        # steward-side; only steward names publish on this record.
+        st, _ = post("/api/mark", {
+            "change_id": "2", "body": "Nine months is too long — six keeps "
+            "the pool funded.", "name": "Secret Squirrel",
+            "contact": "sq@example.org"})
+        check("discussion mark on open proposal -> 303", st == 303)
+        did = newest_queued_mark_id()
+        st, _ = post("/api/mark_action", {"id": did, "action": "read_in"},
+                     cookie=steward_cookie)
+        st, html, _ = get("/changes")
+        check("discussion mark publishes on the change card", st == 200
+              and "Nine months is too long" in html)
+        check("contributor name withheld on change record",
+              "a contributor" in html and "Secret Squirrel" not in html)
+        st, html, _ = get("/margin")
+        check("name withheld in margin too",
+              "a contributor" in html and "Secret Squirrel" not in html)
+        st, body, _ = get("/api/state")
+        check("/api/state strips discussion author",
+              "Secret Squirrel" not in body)
+
+        # Closed window rejects new discussion marks.
+        st, _ = post("/api/change", {
+            "clause_id": "I-1", "proposed_text": "Reword the header",
+            "closes_at": "2000-01-01"}, cookie=steward_cookie)
+        st, _ = post("/api/mark", {"change_id": "3", "body": "too late"})
+        check("mark on closed-window proposal -> 422", st == 422)
 
         # ---- 5. Requests Desk + Steward Status Pipeline ----------------
         st, _ = post("/api/request", {

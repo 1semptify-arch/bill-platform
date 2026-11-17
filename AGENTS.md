@@ -32,6 +32,13 @@ Deposit Protection Act. Small on purpose — keep it that way.
   `/api/request_status`) require Steward mode (`1-tap` on loopback when
   `BILL_STEWARD_CODE` is unset; passcode-gated via `BILL_STEWARD_CODE`
   when set). Contact fields never render anywhere.
+- **Change discussions: only steward names publish.** Marks linked to a
+  `changes` row (`marks.change_id`) render as "a contributor" publicly —
+  `author_label` is collected for evaluation but never displayed there or
+  in `/api/state`. Resolutions require a public `note` (the reason is the
+  record); `resolved_by` is the optional consent-named steward. A proposal
+  is open while `status='proposed'` and `closes_at` hasn't passed
+  (`db.change_is_open`).
 - **Moderation mechanics exist — use them per MODERATION.md.** Stewards
   can `redact` (clears name+contact columns — gone, not hidden),
   `edit` (replaces body for ads/hate/spam; original kept in

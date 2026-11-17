@@ -24,7 +24,7 @@ import json
 import secrets
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import seed_data
@@ -115,7 +115,10 @@ CREATE TABLE IF NOT EXISTS marks (
     redact_note    TEXT,
     edited_at      TEXT,                   -- body replaced by stewards
     edit_note      TEXT,                   -- public reason ("advertising removed")
-    body_original  TEXT                    -- pre-edit body, steward-only record
+    body_original  TEXT,                   -- pre-edit body, steward-only record
+    change_id      INTEGER REFERENCES changes(id)
+                                           -- mark weighs in on proposal CH-XXXX
+                                           -- (author_label never renders on these)
 );
 CREATE TABLE IF NOT EXISTS requests (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,6 +182,8 @@ CREATE TABLE IF NOT EXISTS changes (
     old_text      TEXT,                   -- statute text before (snapshot)
     new_text      TEXT,                   -- statute text after
     note          TEXT,
+    closes_at     TEXT,                    -- discussion window end (YYYY-MM-DD)
+    resolved_by   TEXT,                    -- steward name, published w/ consent
     status        TEXT NOT NULL DEFAULT 'proposed'
                   CHECK (status IN ('proposed','incorporated','declined',
                                     'retracted')),
@@ -304,8 +309,11 @@ def init(path: Path | None = None) -> None:
         for table, cols in {"marks": ["receipt TEXT", "retracted_at TEXT",
                                       "retract_note TEXT", "redacted_at TEXT",
                                       "redact_note TEXT", "edited_at TEXT",
-                                      "edit_note TEXT", "body_original TEXT"],
-                            "requests": ["receipt TEXT"]}.items():
+                                      "edit_note TEXT", "body_original TEXT",
+                                      "change_id INTEGER REFERENCES changes(id)"],
+                            "requests": ["receipt TEXT"],
+                            "changes": ["closes_at TEXT",
+                                        "resolved_by TEXT"]}.items():
             have_cols = {r["name"] for r in con.execute(
                 f"PRAGMA table_info({table})").fetchall()}
             for col in cols:
@@ -621,7 +629,8 @@ def last_event() -> sqlite3.Row | None:
 def add_mark(clause_id: str | None, kind: str, body: str,
              name: str | None, contact: str | None,
              reply_to: str | None, quote: str | None,
-             proposed: str | None) -> int:
+             proposed: str | None,
+             change_id: int | None = None) -> int:
     if kind not in ("question", "edit", "comment"):
         kind = "comment"
     receipt = secrets.token_hex(4)
@@ -629,12 +638,12 @@ def add_mark(clause_id: str | None, kind: str, body: str,
         con.execute(
             "INSERT INTO marks (clause_id, kind, quote_text, proposed_text,"
             " body, author_label, contact, reply_to, status, created_at,"
-            " receipt) VALUES (?,?,?,?,?,?,?,?,'queued',?,?)",
+            " receipt, change_id) VALUES (?,?,?,?,?,?,?,?,'queued',?,?,?)",
             (clause_id or None, kind, (quote or "").strip() or None,
              (proposed or "").strip() or None, body.strip(),
              (name or "").strip() or None,
              (contact or "").strip() or None, reply_to or None, utc_now(),
-             receipt))
+             receipt, change_id))
     return receipt
 
 
@@ -831,22 +840,24 @@ def change_counts() -> dict[str, int]:
 
 
 def add_change(clause_id: str | None, proposed_text: str, quote: str | None,
-               note: str | None) -> str:
+               closes_at: str | None = None,
+               note: str | None = None) -> str:
     """Steward-recorded proposed change (requests lane, briefings, etc.)."""
     with connect() as con:
         ch_no = _next_no(con, "changes", "CH")
         con.execute(
             "INSERT INTO changes (public_no, clause_id, quote_text,"
-            " proposed_text, note, status, created_at)"
-            " VALUES (?,?,?,?,?,'proposed',?)",
+            " proposed_text, note, closes_at, status, created_at)"
+            " VALUES (?,?,?,?,?,?,'proposed',?)",
             (ch_no, clause_id or None, (quote or "").strip() or None,
-             proposed_text.strip(), (note or "").strip() or None, utc_now()))
+             proposed_text.strip(), (note or "").strip() or None,
+             (closes_at or "").strip() or None, utc_now()))
     return ch_no
 
 
 def change_action(change_id: int, action: str, edition: str | None = None,
-                  new_text: str | None = None,
-                  note: str | None = None) -> bool:
+                  new_text: str | None = None, note: str | None = None,
+                  resolved_by: str | None = None) -> bool:
     """proposed -> incorporated (records old/new text + edition) |
     declined | retracted."""
     if action not in ("incorporated", "declined", "retracted"):
@@ -869,12 +880,35 @@ def change_action(change_id: int, action: str, edition: str | None = None,
             " edition = COALESCE(?, edition),"
             " old_text = COALESCE(old_text, ?),"
             " new_text = COALESCE(?, new_text),"
+            " resolved_by = COALESCE(?, resolved_by),"
             " note = CASE WHEN ? IS NULL THEN note"
             "           ELSE COALESCE(note,'') || ' ' || ? END"
             " WHERE id = ?",
             (action, utc_now(), (edition or "").strip() or None, old,
-             (new_text or "").strip() or None, n, n, change_id))
+             (new_text or "").strip() or None,
+             (resolved_by or "").strip() or None, n, n, change_id))
     return True
+
+
+def change_is_open(change_id: int) -> bool:
+    """True when the proposal exists, is still 'proposed', and its
+    discussion window hasn't passed (closes_at is a YYYY-MM-DD date)."""
+    with connect() as con:
+        row = con.execute(
+            "SELECT status, closes_at FROM changes WHERE id = ?",
+            (change_id,)).fetchone()
+    if not row or row["status"] != "proposed":
+        return False
+    return not (row["closes_at"] and
+                row["closes_at"] < date.today().isoformat())
+
+
+def marks_for_change(change_id: int) -> list[sqlite3.Row]:
+    """Read-in discussion marks on a proposal — public thread."""
+    with connect() as con:
+        return con.execute(
+            "SELECT * FROM marks WHERE change_id = ? AND status = 'read_in'"
+            " ORDER BY created_at", (change_id,)).fetchall()
 
 
 def add_request(req_type: str, summary: str, details: str | None,

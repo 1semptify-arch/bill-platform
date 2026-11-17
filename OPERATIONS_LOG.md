@@ -865,3 +865,19 @@ the mark form's crisis line now links to the help page.
 - Drive note: dashboard menus/dialogs die when the CDP connection drops
   between calls — drive.js now has a `run` command keeping one session
   alive for multi-step flows.
+
+## 2026-11-17 — Change-approval workflow: open window (option B)
+
+- Proposals now take public discussion marks via marks.change_id — the
+  thread renders on the change card, marks still land dark in intake
+  until steward read-in.
+- closes_at (YYYY-MM-DD) sets the discussion window; closed/non-proposed
+  changes reject marks server-side (422).
+- Resolving (incorporate/decline) now REQUIRES a public note — the
+  reason is the record; endpoint 422s without it.
+- resolved_by = optional steward name, published with consent. Only
+  steward names ever appear on the change record; contributor names are
+  collected for evaluation but never render there or in /api/state.
+- Selfcheck 4c covers: 422 without reason, discussion mark lifecycle,
+  name withheld on change card + margin + api/state, closed window
+  rejects, consent-named steward renders. SELFCHECK PASS.

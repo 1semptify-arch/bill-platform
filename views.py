@@ -274,6 +274,8 @@ def _mark_html(m, show_answer_link: bool = True, steward: bool = False) -> str:
     kind = KIND_WORDS.get(m["kind"], "comment")
     if m["redacted_at"]:
         author = ' · <span class="quiet">name withheld by stewards</span>'
+    elif m["change_id"]:
+        author = ' · a contributor'
     else:
         author = (f' · {esc(m["author_label"])}' if m["author_label"]
                   else " · unsigned")
@@ -956,7 +958,7 @@ def present(slide: int, clause_id: str | None, rent: float, ctx: dict,
         recent_marks = db.marks(status="read_in")[-3:]
         m_list = "".join(
             f'<div class="stage-box compact">'
-            f'<p class="mno"><b>{esc(m["public_no"])}</b> on <b>{esc(m["clause_id"] or "general")}</b> · {esc(m["author_label"] or "unsigned")}</p>'
+            f'<p class="mno"><b>{esc(m["public_no"])}</b> on <b>{esc(m["clause_id"] or "general")}</b> · {esc(m["author_label"] or ("a contributor" if m["change_id"] else "unsigned"))}</p>'
             f'<p>{esc(m["body"])}</p>'
             f'{"<p class=quiet><b>Answer:</b> " + esc(m["response_body"]) + "</p>" if m["response_body"] else ""}'
             f'</div>'
@@ -1070,6 +1072,7 @@ accidental personal details, spam, and housing emergencies hitting a comment box
 <article class="mark intake">
   <p class="mno"><b>Intake #{m['id']}</b> · {esc(m['created_at'])} ·
     {KIND_WORDS.get(m['kind'], 'comment')} · {_clause_label(m['clause_id'])}
+    {" · re: proposed change" if m["change_id"] else ""}
     {" · " + esc(m["author_label"]) if m["author_label"] else " · unsigned"}</p>
   {'<blockquote class="quote">“' + esc(m["quote_text"]) + '”</blockquote>' if m["quote_text"] else ""}
   {'<p class="proposed"><b>Proposed:</b> ' + esc(m["proposed_text"]) + '</p>' if m["proposed_text"] else ""}
@@ -1344,6 +1347,8 @@ def editions(ctx: dict) -> bytes:
 def _change_html(ch: dict, steward: bool = False) -> str:
     src = (f' · re: <b>{esc(ch["mark_no"])}</b>' if ch["mark_no"] else "")
     ed = (f' · edition <b>{esc(ch["edition"])}</b>' if ch["edition"] else "")
+    by = (f' · resolved by <b>{esc(ch["resolved_by"])}</b>'
+          if ch["resolved_by"] else "")
     diff = ""
     if ch["status"] == "incorporated" and (ch["old_text"] or ch["new_text"]):
         diff = ('<div class="ch-diff">'
@@ -1351,13 +1356,46 @@ def _change_html(ch: dict, steward: bool = False) -> str:
                    if ch["old_text"] else "")
                 + (f'<p class="ch-new"><b>Now:</b> {esc(ch["new_text"])}</p>'
                    if ch["new_text"] else "") + '</div>')
+    window = ""
+    if ch["status"] == "proposed" and ch["closes_at"]:
+        window = (f'<p class="quiet">Discussion open until '
+                  f'<b>{esc(ch["closes_at"])}</b>.</p>')
+    thread = ""
+    if ch["status"] == "proposed":
+        marks = db.marks_for_change(ch["id"])
+        if marks:
+            thread = ('<div class="ch-thread">'
+                      + "".join(
+                          f'<p class="mark-body">{esc(m["body"])}</p>'
+                          f'<p class="quiet">a contributor · '
+                          f'{esc(m["created_at"])}'
+                          + (f' <span class="quiet">(edited by stewards'
+                             + (f' — {esc(m["edit_note"])}' if m["edit_note"] else "")
+                             + ')</span>' if m["edited_at"] else "")
+                          + '</p>' for m in marks)
+                      + '</div>')
+        open_now = db.change_is_open(ch["id"])
+        if open_now:
+            thread += f"""
+  <details class="stack"><summary><b>Weigh in on this proposal</b></summary>
+  <form method="post" action="/api/mark" class="stack">
+    <input type="hidden" name="change_id" value="{ch['id']}">
+    <textarea name="body" rows="3" required
+              placeholder="Support, concern, or alternative wording"></textarea>
+    <div class="row"><input name="name" placeholder="Name (stewards only — never published here)" maxlength="120">
+    <input name="contact" placeholder="Contact (steward-only, optional)" maxlength="120"></div>
+    <p class="quiet">Names on change discussions never publish — only steward
+    names appear on this record, with their consent.</p>
+    <div class="row"><button>Send to the stewards</button></div>
+  </form></details>"""
     acts = ""
     if steward and ch["status"] == "proposed":
         acts = f"""
   <form method="post" action="/api/change_status" class="stack">
     <input type="hidden" name="id" value="{ch['id']}">
     <div class="row"><input name="edition" placeholder="Edition ref (e.g. E-10)" maxlength="20">
-    <input name="note" placeholder="Note (optional)" maxlength="500"></div>
+    <input name="resolved_by" placeholder="Your name (published — blank stays unnamed)" maxlength="120"></div>
+    <input name="note" placeholder="Public reason — required, it is the record" maxlength="500" required>
     <textarea name="new_text" rows="2" placeholder="Statute text as incorporated (optional)"></textarea>
     <div class="row"><button name="action" value="incorporated">Incorporate</button>
     <button name="action" value="declined" class="ghost">Decline</button></div>
@@ -1373,7 +1411,9 @@ def _change_html(ch: dict, steward: bool = False) -> str:
 <article class="mark">
   <p class="mno"><b>{esc(ch['public_no'])}</b> {_status(ch['status'])} ·
     {_clause_label(ch['clause_id']) if ch['clause_id'] else 'whole draft'}{src}{ed} ·
-    <span class="quiet">{esc(ch['resolved_at'] or ch['created_at'])}</span></p>
+    <span class="quiet">{esc(ch['resolved_at'] or ch['created_at'])}</span>{by}</p>
+  {window}
+  {thread}
   {'<blockquote class="quote">“' + esc(ch["quote_text"]) + '”</blockquote>' if ch["quote_text"] else ""}
   {'<p class="proposed"><b>Proposed:</b> ' + esc(ch["proposed_text"]) + '</p>' if ch["proposed_text"] else ""}
   {diff}
@@ -1407,6 +1447,7 @@ def changes_page(status_filter: str | None, ctx: dict) -> bytes:
   <textarea name="proposed_text" rows="3" required
             placeholder="Proposed wording"></textarea>
   <input name="note" placeholder="Source / note (e.g. R-0003, briefing)">
+  <input name="closes_at" placeholder="Discussion open until (YYYY-MM-DD, optional)" maxlength="10">
   <div class="row"><button>Record CH</button></div>
 </form></details>"""
     body = f"""
@@ -1414,8 +1455,9 @@ def changes_page(status_filter: str | None, ctx: dict) -> bytes:
 <p class="lede">Every proposed and incorporated change on the record —
 <b>{open_n}</b> open proposal(s), {counts.get("incorporated", 0)} incorporated,
 {counts.get("declined", 0)} declined, {counts.get("retracted", 0)} retracted.
-Edit marks read into the Margin land here automatically; nothing is deleted,
-only resolved. <b>Newest activity first.</b></p></header>
+Open proposals take discussion marks below each card; when a steward resolves
+one, the public reason is required and only steward names appear — with their
+consent. Nothing is deleted, only resolved. <b>Newest activity first.</b></p></header>
 {pills_html}
 {record_form}
 {"".join(_change_html(ch, ctx["steward"]) for ch in rows) or

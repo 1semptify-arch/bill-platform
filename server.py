@@ -247,6 +247,8 @@ class Handler(BaseHTTPRequestHandler):
                 d.pop("contact", None)
                 d.pop("receipt", None)
                 d.pop("body_original", None)
+                if d.get("change_id"):
+                    d["author_label"] = None  # discussion names never publish
                 safe_marks.append(d)
             safe_reqs = []
             for r in db.requests():
@@ -477,13 +479,23 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(b"a mark with no mark is nothing", 422,
                            "text/plain; charset=utf-8")
                 return
+            change_id = None
+            try:
+                change_id = int(self._one(form, "change_id", 20)) or None
+            except ValueError:
+                change_id = None
+            if change_id and not db.change_is_open(change_id):
+                self._send(b"that proposal is not open for discussion", 422,
+                           "text/plain; charset=utf-8")
+                return
             rc = db.add_mark(self._one(form, "clause_id", 40) or None,
                              self._one(form, "kind", 20), body,
                              self._one(form, "name", 200),
                              self._one(form, "contact", 200),
                              self._one(form, "reply_to", 20) or None,
                              self._one(form, "quote", 400) or None,
-                             self._one(form, "proposed") or None)
+                             self._one(form, "proposed") or None,
+                             change_id)
             self._redirect(f"/track?code={rc}&new=mark")
             return
 
@@ -552,6 +564,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             db.add_change(self._one(form, "clause_id", 40) or None,
                           proposed, self._one(form, "quote_text", 2000),
+                          self._one(form, "closes_at", 20),
                           self._one(form, "note", 1000))
             self._redirect("/changes")
             return
@@ -561,12 +574,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(b"steward unlock required for change triage", 403,
                            "text/plain; charset=utf-8")
                 return
+            act = self._one(form, "action", 20)
+            note = self._one(form, "note", 1000) or None
+            if act in ("incorporated", "declined") and not note:
+                self._send(b"resolving a proposal needs a public reason "
+                           b"(the note is the record)", 422,
+                           "text/plain; charset=utf-8")
+                return
             try:
                 db.change_action(int(self._one(form, "id", 20)),
-                                 self._one(form, "action", 20),
+                                 act,
                                  self._one(form, "edition", 20) or None,
                                  self._one(form, "new_text", 4000) or None,
-                                 self._one(form, "note", 1000) or None)
+                                 note,
+                                 self._one(form, "resolved_by", 120) or None)
             except ValueError:
                 pass
             self._redirect("/changes")
