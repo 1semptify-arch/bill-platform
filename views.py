@@ -117,6 +117,7 @@ def _desk_rail(ctx: dict, sublinks: list[tuple[str, str]] | None = None) -> str:
         ("/tv", "TV Briefing Deck"),
         ("—", "Public pages"),
         ("/bill/research", "Numbers & Sources"),
+        ("/bill/precedents", "Where Others Tried"),
         ("/bill/history", "History"),
         ("/bill/providers", "For Providers"),
         ("/bill/brief", "The Brief"),
@@ -2003,6 +2004,7 @@ that's what makes the ledger honest.</p>
 
 CONTENT_PAGES = {
     "research": "The numbers & sources",
+    "precedents": "Where others tried",
     "history": "Bill history",
     "providers": "For housing providers",
     "brief": "The brief",

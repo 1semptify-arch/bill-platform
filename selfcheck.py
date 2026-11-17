@@ -624,7 +624,7 @@ def main() -> int:
         check("MN flag asset serves", st == 200 and "<svg" in flag)
 
         # consolidated mirror content — same source, platform chrome
-        for slug in ("research", "history", "providers", "brief",
+        for slug in ("research", "precedents", "history", "providers", "brief",
                      "classroom", "press", "myths"):
             st, html, _ = get(f"/bill/{slug}")
             check(f"content page /bill/{slug} serves in platform chrome",

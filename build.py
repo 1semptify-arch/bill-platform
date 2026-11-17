@@ -68,7 +68,7 @@ def parse_fragment(text: str):
     return meta, text[m.end():].strip()
 
 
-NAV_KEYS = ("bill", "live", "research", "changes", "voice",
+NAV_KEYS = ("bill", "live", "research", "precedents", "changes", "voice",
             "history", "providers", "brief", "classroom", "press", "myths")
 
 

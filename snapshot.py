@@ -133,7 +133,7 @@ DEPLOY_OUT = HERE / "site" / "bill"
 # Static read surface (GET only). Everything else falls through to origin.
 DEPLOY_PAGES = [
     "/", "/desk", "/bill", "/teach", "/calculator", "/help", "/legal",
-    "/research", "/history", "/providers", "/brief", "/classroom",
+    "/research", "/precedents", "/history", "/providers", "/brief", "/classroom",
     "/press", "/myths", "/what-the-bill-changes",
 ]
 DEPLOY_PAGES += [f"/clause/{r['id']}" for r in db.clauses()]

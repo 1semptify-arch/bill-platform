@@ -903,3 +903,24 @@ the mark form's crisis line now links to the help page.
 - X-Steward-Code header accepts personal codes for API-style calls.
 - Selfcheck 4e: code issuance, one-time display, personal unlock, name
   prefill, retired-code rejection. SELFCHECK PASS.
+
+## 2026-11-17 — /bill/precedents research page
+
+- New public page: "Where others tried" — the record of private rent
+  insurance / deposit-alternative attempts and the public models that work.
+- Three ledgers, every claim source-linked: private companies (Rhino, Jetty,
+  LeaseLock, Obligo, German Mietkautionsversicherung), legislative outcomes
+  (Cincinnati, Atlanta, Columbus, Maryland, Baltimore, NY COVID order,
+  federal FTC call), public models (France Visale, UK deposit protection,
+  Norway Depositumskonto, NCLC policy record).
+- Verdict color coding: pr-fail (harm/failure), pr-mixed (passed/stalled),
+  pr-work (chose better / works at scale).
+- Wired everywhere: site-src partials (rail_top, rail_tools, nav_deck),
+  views.py CONTENT_PAGES + platform desk rail, build.py PAGE_KEYS/NAV_ORDER,
+  worker.js PAGES map, snapshot.py DEPLOY_PAGES, selfcheck slug loop.
+- Output: site/precedents.html (96.7k) + site/bill/precedents.html snapshot.
+- Verified: SELFCHECK PASS, /bill/precedents 200 in platform chrome locally,
+  IronBee browser ARIA + full-page screenshot clean, zero console errors.
+- NOTE: stale python server on :8093 was shadowing requests — two LISTENING
+  sockets on one port (Windows SO_REUSEADDR). Killed both; rule: always
+  check `netstat -ano | grep 8093` before "it should work" debugging.
