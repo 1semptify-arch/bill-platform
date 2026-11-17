@@ -252,9 +252,18 @@ def _status(status: str) -> str:
             f'{esc(STATUS_WORDS.get(status, status))}</span>')
 
 
+_CLAUSE_IDS: set | None = None
+
+
 def _clause_label(cid) -> str:
-    return (f'<b class="clref"><a href="/clause/{esc(cid)}">{esc(cid)}</a></b>'
-            if cid else '<span class="clref gen">general</span>')
+    global _CLAUSE_IDS
+    if not cid:
+        return '<span class="clref gen">general</span>'
+    if _CLAUSE_IDS is None:
+        _CLAUSE_IDS = {r["id"] for r in db.clauses()}
+    if cid in _CLAUSE_IDS:
+        return f'<b class="clref"><a href="/clause/{esc(cid)}">{esc(cid)}</a></b>'
+    return f'<span class="clref gen">{esc(cid)}</span>'
 
 
 def _reline(m) -> str:

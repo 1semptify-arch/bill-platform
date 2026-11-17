@@ -924,3 +924,21 @@ the mark form's crisis line now links to the help page.
 - NOTE: stale python server on :8093 was shadowing requests — two LISTENING
   sockets on one port (Windows SO_REUSEADDR). Killed both; rule: always
   check `netstat -ano | grep 8093` before "it should work" debugging.
+
+## 2026-11-17 — gap audit + fixes
+
+- Crawled 66 routes end-to-end; audited maps, form actions, API output,
+  redirect chains, and response headers.
+- FIX: editions ledger scope strings ('all', 'Title I', 'Titles I–III',
+  'I-1, I-5, Title II', '—') rendered through _clause_label → broken
+  /clause/<text> hrefs (404s). _clause_label now links only real clause
+  ids; everything else renders a plain 'general' badge. Fixes marks,
+  requests, changes, decisions, editions in one place.
+- FIX: bare /clause → 404; now redirects to /bill.
+- FIX: no security headers — added X-Content-Type-Options: nosniff,
+  X-Frame-Options: SAMEORIGIN, Referrer-Policy to _send. CSP skipped
+  (pages use inline <style>; needs a nonce build first).
+- Verified clean: form actions↔handlers 1:1, /api/state has zero contact
+  fields, /present clamps s=0→1 / s=99→8, /your-voice→/mark and
+  /live→/bill intentional, 404 renders in chrome, no TODO/FIXME,
+  editions/margin/etc. deliberately absent from DEPLOY_PAGES (live pages).

@@ -131,6 +131,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         for k, v in extra or []:
             self.send_header(k, v)
         self.end_headers()
@@ -438,7 +441,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/your-voice":
             self._redirect("/mark")
             return
-        if path in ("/bill/live", "/live"):
+        if path in ("/bill/live", "/live", "/clause"):
             self._redirect("/bill")
             return
         slug = (path[len("/bill/"):] if path.startswith("/bill/")
