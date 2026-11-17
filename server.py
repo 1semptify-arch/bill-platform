@@ -719,6 +719,10 @@ class Handler(BaseHTTPRequestHandler):
 H = Handler  # backwards-compatible alias
 
 
+class BillPlatformServer(ThreadingHTTPServer):
+    request_queue_size = 128
+
+
 def main():
     ap = argparse.ArgumentParser(description="Standalone Bill Platform")
     ap.add_argument("--port", type=int,
@@ -726,7 +730,7 @@ def main():
     ap.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
     args = ap.parse_args()
     db.init()
-    srv = ThreadingHTTPServer((args.host, args.port), Handler)
+    srv = BillPlatformServer((args.host, args.port), Handler)
     print(f"Bill Platform — http://{args.host}:{args.port}  (Ctrl+C to stop)")
     sys.stdout.flush()
     try:
