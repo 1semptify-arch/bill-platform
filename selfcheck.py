@@ -416,6 +416,23 @@ def main() -> int:
         st, _ = post("/api/mark", {"change_id": "3", "body": "too late"})
         check("mark on closed-window proposal -> 422", st == 422)
 
+        # ---- 4d. Steward roster — the committee -----------------------
+        st, _ = post("/api/steward_roster",
+                     {"roster_action": "add", "name": "Test Steward"})
+        check("unauthenticated roster add -> 403", st == 403)
+        st, _ = post("/api/steward_roster",
+                     {"roster_action": "add", "name": "Test Steward",
+                      "role": "resolutions"}, cookie=steward_cookie)
+        st, html, _ = get("/stewards")
+        check("steward added to public roster", st == 200
+              and "Test Steward" in html and "resolutions" in html)
+        st, _ = post("/api/steward_roster",
+                     {"roster_action": "retire", "id": "1"},
+                     cookie=steward_cookie)
+        st, html, _ = get("/stewards")
+        check("retired steward leaves public roster",
+              "Test Steward" not in html)
+
         # ---- 5. Requests Desk + Steward Status Pipeline ----------------
         st, _ = post("/api/request", {
             "req_type": "amendment", "summary": "Pin the II-3 split ratio",

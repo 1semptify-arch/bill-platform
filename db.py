@@ -171,6 +171,15 @@ CREATE TABLE IF NOT EXISTS signatures (
     created_at   TEXT NOT NULL,
     published_at TEXT
 );
+CREATE TABLE IF NOT EXISTS stewards (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,             -- published with consent
+    role        TEXT,                      -- e.g. "lead steward", "intake"
+    note        TEXT,
+    active      INTEGER NOT NULL DEFAULT 1,
+    added_at    TEXT NOT NULL,
+    retired_at  TEXT                       -- roster is a record, not a delete
+);
 CREATE TABLE IF NOT EXISTS changes (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     public_no     TEXT UNIQUE,            -- CH-0001
@@ -901,6 +910,44 @@ def change_is_open(change_id: int) -> bool:
         return False
     return not (row["closes_at"] and
                 row["closes_at"] < date.today().isoformat())
+
+
+# ---------- steward roster (the committee) ----------
+
+def stewards(active_only: bool = True) -> list[sqlite3.Row]:
+    q = "SELECT * FROM stewards"
+    if active_only:
+        q += " WHERE active = 1"
+    q += " ORDER BY added_at, id"
+    with connect() as con:
+        return con.execute(q).fetchall()
+
+
+def add_steward(name: str, role: str | None = None,
+                note: str | None = None) -> int:
+    with connect() as con:
+        cur = con.execute(
+            "INSERT INTO stewards (name, role, note, added_at)"
+            " VALUES (?,?,?,?)",
+            ((name or "").strip(), (role or "").strip() or None,
+             (note or "").strip() or None, utc_now()))
+        return cur.lastrowid
+
+
+def steward_action(steward_id: int, action: str) -> bool:
+    """retire | restore — the roster keeps history either way."""
+    if action not in ("retire", "restore"):
+        return False
+    with connect() as con:
+        if action == "retire":
+            cur = con.execute(
+                "UPDATE stewards SET active = 0, retired_at = ?"
+                " WHERE id = ? AND active = 1", (utc_now(), steward_id))
+        else:
+            cur = con.execute(
+                "UPDATE stewards SET active = 1, retired_at = NULL"
+                " WHERE id = ? AND active = 0", (steward_id,))
+        return cur.rowcount > 0
 
 
 def marks_for_change(change_id: int) -> list[sqlite3.Row]:

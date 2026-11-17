@@ -226,6 +226,7 @@ def page(title: str, body: str, ctx: dict,
   <a href="/requests">Requests</a> · <a href="/positions">Positions</a> ·
   <a href="/claims">Claims</a> · <a href="/decisions">Decisions</a> ·
   <a href="/editions">Editions</a> · <a href="/changes">Changes</a> ·
+  <a href="/stewards">Stewards</a> ·
   <a href="/search">Search</a> · <a href="/teach">Teach</a> ·
   <a href="/track">Track</a> · <a href="/campaign">Campaign</a> · <a href="/sign">Sign</a> · <a href="/tv">TV Present</a> ·
   <a href="/help">Help</a> · <a href="/legal">Legal</a> ·
@@ -1344,6 +1345,57 @@ def editions(ctx: dict) -> bytes:
     ], "Change history tools")
 
 
+def stewards_page(ctx: dict) -> bytes:
+    rows = db.stewards(active_only=True)
+    retired = [] if not ctx["steward"] else db.stewards(active_only=False)
+    retired = [r for r in retired if not r["active"]]
+    cards = "".join(
+        f'<article class="mark"><p class="mno"><b>{esc(r["name"])}</b>'
+        + (f' · {esc(r["role"])}' if r["role"] else "")
+        + f' · <span class="quiet">since {esc(r["added_at"])}</span></p>'
+        + (f'<p>{esc(r["note"])}</p>' if r["note"] else "")
+        + (f'<form method="post" action="/api/steward_roster" class="stack">'
+           f'<input type="hidden" name="id" value="{r["id"]}">'
+           f'<button name="roster_action" value="retire" class="ghost">'
+           f'Retire from roster</button></form>' if ctx["steward"] else "")
+        + '</article>' for r in rows)
+    add_form = ""
+    if ctx["steward"]:
+        add_form = f"""
+<details class="stack"><summary><b>Add a steward</b></summary>
+<form method="post" action="/api/steward_roster" class="stack">
+  <input type="hidden" name="roster_action" value="add">
+  <div class="row"><input name="name" required placeholder="Name — published here with their consent" maxlength="120">
+  <input name="role" placeholder="Role (e.g. intake, resolutions)" maxlength="120"></div>
+  <input name="note" placeholder="Note (how chosen, scope)" maxlength="400">
+  <div class="row"><button>Add to the committee</button></div>
+</form></details>"""
+        if retired:
+            add_form += ('<p class="quiet"><b>Retired:</b> ' + ", ".join(
+                f'{esc(r["name"])} ({esc(r["retired_at"] or "")}) '
+                f'<form method="post" action="/api/steward_roster" '
+                f'style="display:inline"><input type="hidden" name="id" '
+                f'value="{r["id"]}"><button name="roster_action" '
+                f'value="restore" class="ghost">restore</button></form>'
+                for r in retired) + '</p>')
+    body = f"""
+<header class="mast"><h1>The stewards</h1>
+<p class="lede">The people who read intake into the public record, moderate
+the boards, and resolve proposed changes to the bill's wording. <b>Only
+steward names publish on this platform, and only with consent.</b>
+While the platform gets rolling, stewards are chosen by the bill's authors —
+the goal is a standing committee that owns resolutions together. Retired
+stewards stay in the record, not erased.</p></header>
+{add_form}
+{cards or '<p class="quiet">The committee is forming — no stewards named yet.</p>'}"""
+    return page("Stewards", body, ctx, [
+        ("The draft", "/bill", "primary"),
+        ("Changes", "/changes", "link"),
+        ("The margin", "/margin", "link"),
+        ("Requests", "/requests", "link"),
+    ], "Stewards")
+
+
 def _change_html(ch: dict, steward: bool = False) -> str:
     src = (f' · re: <b>{esc(ch["mark_no"])}</b>' if ch["mark_no"] else "")
     ed = (f' · edition <b>{esc(ch["edition"])}</b>' if ch["edition"] else "")
@@ -1457,7 +1509,9 @@ def changes_page(status_filter: str | None, ctx: dict) -> bytes:
 {counts.get("declined", 0)} declined, {counts.get("retracted", 0)} retracted.
 Open proposals take discussion marks below each card; when a steward resolves
 one, the public reason is required and only steward names appear — with their
-consent. Nothing is deleted, only resolved. <b>Newest activity first.</b></p></header>
+consent. The <a href="/stewards">steward roster</a> names who holds that
+authority. Nothing is deleted, only resolved.
+<b>Newest activity first.</b></p></header>
 {pills_html}
 {record_form}
 {"".join(_change_html(ch, ctx["steward"]) for ch in rows) or

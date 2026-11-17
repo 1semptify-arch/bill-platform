@@ -396,6 +396,7 @@ class Handler(BaseHTTPRequestHandler):
             "/editions": lambda: views.editions(ctx),
             "/changes": lambda: views.changes_page(
                 q.get("s", [None])[0], ctx),
+            "/stewards": lambda: views.stewards_page(ctx),
             "/search": lambda: views.search_page(q.get("q", [""])[0], ctx),
             "/track": lambda: views.track_page(q.get("code", [""])[0],
                                                q.get("new", [""])[0], ctx),
@@ -616,6 +617,28 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 pass
             self._redirect("/sign")
+            return
+
+        if path == "/api/steward_roster":
+            if not self._is_steward():
+                self._send(b"steward unlock required for the roster", 403,
+                           "text/plain; charset=utf-8")
+                return
+            act = self._one(form, "roster_action", 20)
+            if act == "add":
+                if not self._one(form, "name", 120):
+                    self._send(b"a steward needs a name", 422,
+                               "text/plain; charset=utf-8")
+                    return
+                db.add_steward(self._one(form, "name", 120),
+                               self._one(form, "role", 120),
+                               self._one(form, "note", 400))
+            else:
+                try:
+                    db.steward_action(int(self._one(form, "id", 20)), act)
+                except ValueError:
+                    pass
+            self._redirect("/stewards")
             return
 
         if path == "/api/supporter":

@@ -881,3 +881,13 @@ the mark form's crisis line now links to the help page.
 - Selfcheck 4c covers: 422 without reason, discussion mark lifecycle,
   name withheld on change card + margin + api/state, closed window
   rejects, consent-named steward renders. SELFCHECK PASS.
+
+## 2026-11-17 — Steward roster (bootstrap committee)
+
+- /stewards is the public committee roster: who holds intake/moderation/
+  resolution authority, named with consent, retire keeps history.
+- Bootstrap rule on the record: stewards chosen by the bill's authors
+  while the platform gets rolling; goal is a standing committee owning
+  resolutions together. Voting thresholds / per-steward identity deferred
+  until the committee is real.
+- Steward-gated /api/steward_roster: add | retire | restore. Selfcheck 4d.
