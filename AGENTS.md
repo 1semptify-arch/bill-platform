@@ -15,6 +15,16 @@ Deposit Protection Act. Small on purpose — keep it that way.
   off-loopback. Independent micro-repo, decoupled from Semptify's
   `ssot.css` / `sync_assets.py` constraints while keeping the canonical
   bill substance intact.
+
+- **Data rules are this repo's own — deliberate scope.** The app-level
+  "no user PII ever" standard does NOT apply here: this platform
+  exists to collect a *public record* (marks, signatures, requests) —
+  like testimony to a committee. Voluntary contact/email fields are
+  therefore allowed, but strictly bounded: opt-in only, never rendered
+  publicly, dark until a steward reads them in, publishable fields only
+  with explicit consent, full backup steward-gated. Do not "fix" the
+  platform to the app's no-PII posture — the micro-repo exists so the
+  public-record rules could be scoped independently.
 - **Intake is dark & Steward-gated.** Marks never render publicly until
   `read_in`. Queued intake bodies and triage mutations (`/api/mark_action`,
   `/api/request_status`) require Steward mode (`1-tap` on loopback when
