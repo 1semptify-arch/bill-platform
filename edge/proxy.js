@@ -47,13 +47,17 @@ export default {
 
     if (isStatic) {
       const file = snapFile(path, u.search);
-      const r = await fetch(SNAP + file + '?v=1',
+      const r = await fetch(SNAP + file + '?v=2',
                             { cf: { cacheTtl: 300, cacheEverything: true } });
       if (r.ok) {
         const ext = file.split('.').pop();
-        const h = new Headers(r.headers);
-        h.set('content-type', CT[ext] || 'application/octet-stream');
-        h.set('x-bp-source', 'snapshot');
+        // Fresh headers only — raw.githubusercontent adds CSP 'none' +
+        // sandbox headers that block every asset if passed through.
+        const h = new Headers({
+          'content-type': CT[ext] || 'application/octet-stream',
+          'cache-control': 'public, max-age=300',
+          'x-bp-source': 'snapshot',
+        });
         return new Response(r.body, { headers: h });
       }
       // fall through to origin if the snapshot file is missing
