@@ -1,0 +1,41 @@
+name: keepalive
+
+# Render free tier: 750 shared instance-hours/month across the whole
+# workspace + 15-min idle spin-down. Two services cannot both run 24/7
+# free (24h x 2 x 30d = 1440h >> 750h), so we split daytime windows:
+#
+#   bill-platform-5873 : warm 07:00-21:00 CT  (~14h/day)
+#   semptify-jsam      : warm 07:00-16:00 CT  (~9h/day)
+#
+# ~23 service-hrs/day ~= 690 hrs/month < 750 cap. Overnight both may
+# sleep; the Cloudflare mirror workers still serve every public page
+# from the GitHub snapshot instantly, so nothing "goes down" for
+# visitors — only live writes/API hits pay a ~30-60s origin wake.
+#
+# Times below are UTC. CT = UTC-6 in winter, UTC-5 in summer
+# (windows drift ~1h under daylight saving — harmless either way).
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping warm-window origins
+        run: |
+          hour=$(date -u +%-H)
+          # bill-platform warm 07:00-21:00 CT  =  13:00-03:00 UTC
+          if [ "$hour" -ge 13 ] || [ "$hour" -lt 3 ]; then
+            echo "ping bill-platform (hour=$hour)"
+            curl -s -o /dev/null -w "bill-platform: %{http_code} in %{time_total}s\n" \
+              "https://bill-platform-5873.onrender.com/bill" || true
+          fi
+          # semptify warm 07:00-16:00 CT  =  13:00-22:00 UTC
+          if [ "$hour" -ge 13 ] && [ "$hour" -lt 22 ]; then
+            echo "ping semptify (hour=$hour)"
+            curl -s -o /dev/null -w "semptify: %{http_code} in %{time_total}s\n" \
+              "https://semptify-jsam.onrender.com/" || true
+          fi
