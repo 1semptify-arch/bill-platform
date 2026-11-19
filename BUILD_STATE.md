@@ -143,3 +143,24 @@ What's live, what's pending. Updated when state changes — not a changelog
 - **Render hours:** ~0 while idle (sleeps; only live-path traffic wakes).
   Shared free-tier budget with Semptify/septify-pi is safe.
 - **Republish reads:** python snapshot.py --deploy && git push.
+
+## Current state (2026-11-18)
+
+- **Public intake bug fixed + deployed:** honeypot check read key
+  presence, not value — every real browser mark/request/signature was
+  silently discarded since 356cde0. Fixed cb6ade5, pushed, selfcheck
+  PASS (honeypot coverage now exercised end-to-end).
+- **Load tested:** tools/bill_stress.py (master repo) — ~7.4k local
+  requests, zero 5xx/locks; 40/40 prod 200s p50 ~300-700ms. listen
+  backlog widened 5->128 (7cdf653); GH Actions keepalive pings Render
+  inside daytime windows (8da4d8c) — cold starts should be rare.
+- **/bill/precedents live** — private-failure + public-model record,
+  12-slide interactive PDF deck in app-crm/docs (36 live links).
+- **Campaign layer in app-crm (master repo):** 35-contact verified
+  roster seed, 7-day plan, outreach drafts, contacts/agenda docs.
+- **Pending:** Gmail MCP drafts (server down — texts saved in
+  app-crm/docs/OUTREACH_DRAFTS.md); bill@semptify.org send-as + DMARC
+  p=none record; verify prod /bill/mark accepts a real submission;
+  selfcheck POST helper now sends website= (done 2026-11-18 pass).
+- **Known noise:** untracked .cursor/ + .playwright-mcp/ dirs —
+  tool artifacts, gitignored 2026-11-18, do not commit.
