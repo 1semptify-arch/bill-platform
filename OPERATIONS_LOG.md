@@ -942,3 +942,37 @@ the mark form's crisis line now links to the help page.
   fields, /present clamps s=0→1 / s=99→8, /your-voice→/mark and
   /live→/bill intentional, 404 renders in chrome, no TODO/FIXME,
   editions/margin/etc. deliberately absent from DEPLOY_PAGES (live pages).
+
+## 2026-11-19 — embedded bill-platform inside Semptify (one Render free service)
+
+- ROOT CAUSE of "always-on" problem: 750 shared free instance-hours/month
+  per workspace = exactly ONE 24/7 service. Two services = ~1,440 hrs =
+  guaranteed mid-month suspension of EVERYTHING.
+- Fix: bill-platform cloned into Semptify image at build, runs on
+  loopback 127.0.0.1:8093 beside uvicorn. Semptify FastAPI middleware
+  (outermost — added last, runs first, before portal routes + checkpoint
+  gate) proxies /bill*, /your-voice*, /what-the-bill-changes* when
+  BILL_UPSTREAM is set. Duplicate Set-Cookie preserved (no dict()).
+- GOTCHA: live Semptify service builds ./Dockerfile, NOT
+  Dockerfile.render (render.yaml blueprint disagrees with deployed
+  service config — get_service dockerfilePath is the truth). Embed
+  block now lives in BOTH files, comment says keep in sync.
+- Semptify PRs merged: #346 (embed+middleware), #347 (middleware
+  ordering), #348 (embed into ./Dockerfile — the one that made it live).
+- VERIFIED LIVE: semptify-jsam.onrender.com/bill, /bill/desk,
+  /bill/api/state, /bill/present all 200 real content ~0.2s; container
+  logs show `[bill-platform] 127.0.0.1 "GET /bill ..." 200`;
+  semptify.org/bill 200 through CF edge. /your-voice + /what-the-bill-
+  changes return bill server's own 303 canonical redirects (correct).
+- PENDING (Brad, dashboard-only): (1) suspend bill-platform-5873 THEN
+  copy its env vars (BILL_STEWARD_CODE, LITESTREAM_ACCESS_KEY_ID,
+  LITESTREAM_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT) to Semptify —
+  order matters: embedded litestream must never share the R2 replica
+  with a live 5873 litestream (two writers corrupt the replica). Until
+  env vars land, embedded bill runs ephemeral SQLite — marks/signatures
+  on it DO NOT persist across restarts. (2) Cloudflare API token with
+  Workers Scripts Edit → deploy edge/proxy.js (ORIGIN already pointed
+  at semptify-jsam, prepends /bill to live paths) so platform.semptify.org
+  live paths leave 5873.
+- SAFETY: do NOT suspend 5873 before worker switch unless platform.
+  semptify.org live features (marks/api/steward) can be briefly down.
