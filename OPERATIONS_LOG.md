@@ -976,3 +976,36 @@ the mark form's crisis line now links to the help page.
   live paths leave 5873.
 - SAFETY: do NOT suspend 5873 before worker switch unless platform.
   semptify.org live features (marks/api/steward) can be briefly down.
+
+## 2026-11-19 — cutover COMPLETE: embedded bill is live + persistent
+
+- CDP-driven Edge (devin profile C:\devin-edge-profile, :9222) used for
+  all dashboard work — Brad signed into Cloudflare, agent drove the rest.
+- MINTED: devin-worker-deploy API token (Workers Scripts Edit, semptify.org
+  Routes Edit, account Workers R2 Storage Edit — user API token).
+- ROLLED: bill-platform-litestream R2 token via Actions→Roll — new
+  Access Key ID + Secret captured once. Rolling killed 5873's old secret
+  (its writer dead) — intended.
+- RENDER via MCP update_environment_variables:
+  - Semptify: LITESTREAM_ACCESS_KEY_ID + SECRET (new rolled creds),
+    R2_BUCKET, R2_ENDPOINT, BILL_STEWARD_CODE (fresh, saved at
+    C:\Semptify\secrets\bill-steward-code.txt).
+  - bill-5873: LITESTREAM keys BLANKED — startCommand falls back to
+    plain python, ephemeral DB, no more R2 writes. Service stays up
+    (harmless; nothing routes to it, keepalive doesn't ping it).
+- WORKER: bill-platform-proxy deployed via Cloudflare API
+  (PUT /accounts/{acct}/workers/scripts) with edge/proxy.js — ORIGIN
+  now semptify-jsam, live paths prepended /bill. etag 58de5b4c…
+- VERIFIED LIVE end-to-end:
+  - semptify-jsam /health,/bill,/bill/api/state → 200 ~0.2s
+  - platform.semptify.org /,/api/state,/bill,/steward → 200 (was 303s)
+  - POST platform.semptify.org/api/steward → 303 /bill/intake +
+    bp_steward HttpOnly cookie (passcode login works through the chain)
+  - R2 bucket shows NEW generation a532bb46d984a283 snapshot+WAL at
+    05:28:42Z = embedded boot restore + replicate. Persistence live.
+- bill-5873 left running (ephemeral, unsuspended) — free-tier sleeps on
+  no traffic; suspend in dashboard later for tidiness if desired.
+- LOCAL render API key (rnd_…, semptify-keys.html) is for a DIFFERENT
+  account — empty service list. All tokens in cloudflare-api-token-
+  r2-keys.txt are REVOKED (401). Only working creds now live in:
+  C:\Semptify\secrets\bill-embed-creds.txt
