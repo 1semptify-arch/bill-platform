@@ -214,7 +214,8 @@ def main() -> int:
             "clause_id": "II-3", "kind": "question",
             "body": "The braid's split ratio needs the actuarial before "
                     "this can be priced — flag it on the clause page.",
-            "name": "Test Reviewer", "contact": "t@example.org"})
+            "name": "Test Reviewer", "contact": "t@example.org",
+            "website": ""})
         check("POST /api/mark (public, zero login) -> 303", st == 303)
         mid = newest_queued_mark_id()
 
@@ -469,7 +470,7 @@ def main() -> int:
             "req_type": "amendment", "summary": "Pin the II-3 split ratio",
             "details": "Needed before the actuarial ask lands.",
             "clause_id": "II-3", "org_or_role": "Test Office",
-            "contact": "private-req@example.org"})
+            "contact": "private-req@example.org", "website": ""})
         check("POST /api/request (public) -> 303", st == 303)
         rq = request_id("R-0004")
         st, _ = post("/api/request_status",
@@ -581,7 +582,7 @@ def main() -> int:
         st, hdrs = post("/api/sign", {
             "name": "Dena C.", "org": "Frogtown",
             "note": "Deposits should protect renters.",
-            "email": "dena@example.org", "consent": "yes"})
+            "email": "dena@example.org", "consent": "yes", "website": ""})
         check("signature POST redirects to /track with receipt", st == 303
               and "/track?code=" in (hdrs.get("Location") or ""))
         sig_rc = urllib.parse.parse_qs(urllib.parse.urlparse(
