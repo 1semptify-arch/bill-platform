@@ -4,7 +4,12 @@
 //   LIVE paths    -> Render origin (ledger reads, boards, API, POSTs,
 //                    steward, non-auto screen modes)
 // Deploy snapshots: python snapshot.py --deploy && git push
-const ORIGIN = 'https://bill-platform-5873.onrender.com';
+// Bill platform now runs embedded inside the Semptify service container
+// (cloned at Docker build; Semptify FastAPI proxies /bill* to its internal
+// port) so ONE Render free service covers both apps 24/7 within the shared
+// 750-instance-hours/month pool. Standalone bill-platform-5873 is suspended;
+// re-point ORIGIN there only if the embed is rolled back.
+const ORIGIN = 'https://semptify-jsam.onrender.com';
 const SNAP = 'https://raw.githubusercontent.com/1semptify-arch/bill-platform/main/site/';
 const CT = { html: 'text/html;charset=utf-8', css: 'text/css',
              svg: 'image/svg+xml', js: 'application/javascript',
@@ -51,7 +56,7 @@ export default {
                             { cf: { cacheTtl: 300, cacheEverything: true } });
       if (r.ok) {
         const ext = file.split('.').pop();
-        // Fresh headers only — raw.githubusercontent adds CSP 'none' +
+        // Fresh headers only ï¿½ raw.githubusercontent adds CSP 'none' +
         // sandbox headers that block every asset if passed through.
         const h = new Headers({
           'content-type': CT[ext] || 'application/octet-stream',
@@ -67,7 +72,11 @@ export default {
     h.set('x-forwarded-host', u.host);
     const init = { method: request.method, headers: h, redirect: 'manual' };
     if (request.method !== 'GET' && request.method !== 'HEAD') init.body = request.body;
-    const res = await fetch(ORIGIN + path + u.search, init);
+    // Live paths reach Semptify's /bill proxy: prepend the mount so hits
+    // like platform.semptify.org/api/state arrive as /bill/api/state and
+    // route to the embedded bill server instead of Semptify's own routers.
+    const live = path.startsWith('/bill') ? path : '/bill' + path;
+    const res = await fetch(ORIGIN + live + u.search, init);
     const out = new Headers(res.headers);
     out.set('x-bp-source', 'live');
     return new Response(res.body, { status: res.status, headers: out });
