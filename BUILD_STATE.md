@@ -164,3 +164,24 @@ What's live, what's pending. Updated when state changes — not a changelog
   selfcheck POST helper now sends website= (done 2026-11-18 pass).
 - **Known noise:** untracked .cursor/ + .playwright-mcp/ dirs —
   tool artifacts, gitignored 2026-11-18, do not commit.
+
+## Current state (2026-11-21)
+
+- **Architecture changed 2026-11-19 (other sessions):** bill platform is
+  now EMBEDDED inside the Semptify FastAPI app — semptify.org/bill →
+  CF edge worker → semptify-jsam → middleware → in-container bill
+  server. Persistence: Litestream→R2 with rolled creds on Semptify env.
+  bill-5873 left running but ephemeral/unsuspended (nothing routes to it).
+  See OPERATIONS_LOG.md 2026-11-19 entry for the full cutover record.
+- **Prod intake VERIFIED end-to-end 2026-11-21:** POST
+  semptify.org/bill/api/mark with empty honeypot (browser-identical) →
+  303 /bill/track?code=baefda29 — accepted through the whole chain
+  (CF → FastAPI → embedded server → R2 SQLite). Filled honeypot →
+  /margin (bot path intact). Receipt page renders "queued".
+  Test mark is dark intake, safe for stewards to discard.
+- **Selfcheck PASS** on current tree (includes empty-honeypot coverage
+  on all 3 public intake posts).
+- **Pending (Brad, dashboard):** suspend bill-5873 for tidiness;
+  verify Litestream replication stays healthy on Semptify env.
+- **Untracked:** _C_DRIVE_COORDINATION.md — cross-session C:-cleanup
+  contract file, intentionally not committed.
