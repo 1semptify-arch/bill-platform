@@ -22,8 +22,8 @@ What's live, what's pending. Updated when state changes — not a changelog
 - App-origin redirects: `semptify-jsam.onrender.com/bill*` → 301 to
   `semptify.org/bill*` (verified 2026-11-10).
 - **Publish contract moved into this repo (2026-11-14):** case-side
-  `publish_bill.py` now writes `src/partials/bill_draft.html` (verbatim
-  sanitized working file) + `src/partials/bill_statute.html` (clean
+  `publish_bill.py` now writes `site-src/partials/bill_draft.html` (verbatim
+  sanitized working file) + `site-src/partials/bill_statute.html` (clean
   reading copy — the act-name→notes-tail split the retired app-side
   `bill_statute_view()` used to derive at render time, now cut at
   publish). `build.py` slots them into `live.html` via
