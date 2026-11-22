@@ -2029,7 +2029,6 @@ _LINK_MAP = {
     "/your-voice": "/mark",
     "/contact": "/requests",
     "/donate": "/campaign",
-    "/turnbuchalla/bill-packet.pdf": "/packet",
 }
 
 _HISTORY_NOTE = (
