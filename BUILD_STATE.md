@@ -181,7 +181,10 @@ What's live, what's pending. Updated when state changes — not a changelog
   Test mark is dark intake, safe for stewards to discard.
 - **Selfcheck PASS** on current tree (includes empty-honeypot coverage
   on all 3 public intake posts).
-- **Pending (Brad, dashboard):** suspend bill-5873 for tidiness;
-  verify Litestream replication stays healthy on Semptify env.
+- **bill-5873 suspended** (Render, by user 2026-11-19 — pending tidy-up
+  done; service returns 503, nothing routes to it). Verified 2026-11-22.
+- **Pending (Brad, dashboard):** verify Litestream replication stays
+  healthy on Semptify env (no litestream errors in Render logs through
+  2026-11-22).
 - **Untracked:** _C_DRIVE_COORDINATION.md — cross-session C:-cleanup
   contract file, intentionally not committed.
